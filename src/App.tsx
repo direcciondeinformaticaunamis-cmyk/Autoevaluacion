@@ -56,7 +56,7 @@ export default function App() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [results, setResults] = useState<IndicatorAnalysis[]>([]);
   const [selectedIndicator, setSelectedIndicator] = useState<IndicatorAnalysis | null>(null);
-  const [activeTab, setActiveTab] = useState<'input' | 'dashboard' | 'matrix' | 'catalog' | 'results' | 'search' | 'upload'>('input');
+  const [activeTab, setActiveTab] = useState<'input' | 'dashboard' | 'matrix' | 'catalog' | 'results' | 'search' | 'upload'>('upload');
   const [searchTerm, setSearchTerm] = useState('');
   const [analysisHint, setAnalysisHint] = useState(false);
 
@@ -515,7 +515,7 @@ export default function App() {
     setResults([]);
     setInputText('');
     setSelectedIndicator(null);
-    setActiveTab('input');
+    setActiveTab('upload');
     setAnalysisHint(false);
   };
 
@@ -586,7 +586,7 @@ export default function App() {
                 onClick={() => {
                   if (results.length === 0) {
                     setAnalysisHint(true);
-                    setActiveTab('input');
+                    setActiveTab('upload');
                     return;
                   }
                   setActiveTab('dashboard');
@@ -607,7 +607,7 @@ export default function App() {
                 onClick={() => {
                   if (results.length === 0) {
                     setAnalysisHint(true);
-                    setActiveTab('input');
+                    setActiveTab('upload');
                     return;
                   }
                   setActiveTab('search');
@@ -628,7 +628,7 @@ export default function App() {
                 onClick={() => {
                   if (results.length === 0) {
                     setAnalysisHint(true);
-                    setActiveTab('input');
+                    setActiveTab('upload');
                     return;
                   }
                   setActiveTab('matrix');
@@ -664,18 +664,6 @@ export default function App() {
                 className="w-full text-xs bg-white border border-slate-200 rounded-md px-2.5 py-2 focus:outline-none focus:ring-1 focus:ring-rose-700 placeholder:text-slate-400" 
               />
             </div>
-
-            <button
-              onClick={() => setActiveTab('upload')}
-              className={cn(
-                'w-full px-3 py-2 rounded-md text-[10px] font-bold uppercase transition-all border flex items-center justify-center gap-2',
-                activeTab === 'upload'
-                  ? 'bg-rose-800 text-white border-rose-900 shadow-sm'
-                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-              )}
-            >
-              <Upload className="w-3 h-3" /> Asociar Evidencias
-            </button>
           </div>
 
           <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
@@ -1292,8 +1280,13 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                 className="flex-1 flex flex-col max-w-4xl mx-auto w-full gap-8 py-8 overflow-y-auto min-h-0 pr-1"
               >
                 <div className="text-center">
-                  <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tight mb-2">Asociación de Nuevas Evidencias</h2>
-                  <p className="text-sm text-slate-500 font-medium italic">Sube archivos locales para generar automáticamente sus nomenclaturas académicas.</p>
+                  <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tight mb-2">Central de Carga de Evidencias</h2>
+                  <p className="text-sm text-slate-500 font-medium italic">Sube archivos locales, analiza contenido/OCR y vincula cada evidencia a la matriz.</p>
+                  {analysisHint && results.length === 0 && (
+                    <div className="mt-3 text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 inline-block">
+                      Primero sube archivos y vincula evidencias para habilitar Panel, Buscador y Matriz.
+                    </div>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-8">
