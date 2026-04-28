@@ -573,13 +573,14 @@ export default function App() {
           <div className="p-3 bg-slate-50 border-b border-slate-200 space-y-3">
             <div className="grid grid-cols-3 gap-1">
               <button 
-                onClick={() => setActiveTab('input')}
+                onClick={() => setActiveTab('upload')}
                 className={cn(
                   "flex-1 px-3 py-1.5 rounded-md text-[10px] font-bold uppercase transition-all border",
-                  activeTab === 'input' ? "bg-rose-800 text-white border-rose-900 shadow-sm" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                  activeTab === 'upload' ? "bg-rose-800 text-white border-rose-900 shadow-sm" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
                 )}
+                title="Subir evidencias y generar análisis"
               >
-                Carga
+                Subir
               </button>
               <button 
                 onClick={() => {

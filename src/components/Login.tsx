@@ -97,7 +97,7 @@ export default function Login({
           >
             <div className="flex items-center gap-4">
               <div className="rounded-2xl bg-white p-2.5 ring-1 ring-slate-200 shadow-sm">
-                <img src={logoSrc} alt="UNAMIS" className="h-14 w-14 object-contain" />
+                <img src={logoSrc} alt="UNAMIS" className="h-24 w-24 object-contain" />
               </div>
               <div>
                 <div className="text-xs font-black tracking-[0.32em] text-rose-700 uppercase">UNAMIS</div>
