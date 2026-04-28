@@ -47,8 +47,18 @@ import { buildMaxAnexoByCriterion, nextAnexoForCriterion } from './services/anex
 import { extractPdfText, ocrImageText, ocrPdfText } from './services/pdfText';
 import { cn } from './lib/utils';
 import unamisLogo from './img/LOGO UNAMIS WEB 2 (3).png';
+import Login, { isAuthenticated, logout } from './components/Login';
 
 export default function App() {
+  const [authedUser, setAuthedUser] = useState<string>(() => {
+    if (typeof window === 'undefined') return '';
+    if (!isAuthenticated()) return '';
+    try {
+      return JSON.parse(localStorage.getItem('unamis_auth') || '{}')?.user ?? '';
+    } catch {
+      return '';
+    }
+  });
   const [inputText, setInputText] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [results, setResults] = useState<IndicatorAnalysis[]>([]);
@@ -56,6 +66,11 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'input' | 'dashboard' | 'matrix' | 'catalog' | 'results' | 'search' | 'upload'>('input');
   const [searchTerm, setSearchTerm] = useState('');
   const [analysisHint, setAnalysisHint] = useState(false);
+
+  const [localAnalysisFiles, setLocalAnalysisFiles] = useState<File[]>([]);
+  const [localAnalysis, setLocalAnalysis] = useState<{ status: 'idle' | 'running' | 'done' | 'error'; progress: number; error?: string }>(
+    { status: 'idle', progress: 0 }
+  );
   
   // Advanced Search Filters
   const [filterType, setFilterType] = useState<string>('all');
@@ -86,6 +101,12 @@ export default function App() {
   }, [previewUrl]);
 
   const [pendingEvidence, setPendingEvidence] = useState(() => loadPendingEvidence());
+
+  // Gate the whole app behind a simple login.
+  // Note: this is UI gating only (not a security boundary).
+  if (!authedUser) {
+    return <Login logoSrc={unamisLogo} onAuthed={(u) => setAuthedUser(u)} />;
+  }
 
   const allIndicatorOptions = OFFICIAL_MATRIX.flatMap((d) =>
     d.criteria.flatMap((c) =>
@@ -129,6 +150,151 @@ export default function App() {
     .filter((x) => x.score > 0)
     .sort((a, b) => b.score - a.score)
     .slice(0, 6);
+
+  const inferYearFromName = (name: string): string => {
+    const m = name.match(/\b(19|20)\d{2}\b/);
+    return m?.[0] ?? new Date().getFullYear().toString();
+  };
+
+  const scoreIndicatorForText = (o: (typeof allIndicatorOptions)[number], textLower: string) => {
+    let score = 0;
+    const matched: string[] = [];
+    for (const req of o.requiredDocs) {
+      const key = String(req).toLowerCase();
+      if (key && textLower.includes(key)) {
+        score += 6;
+        matched.push(req);
+      } else {
+        for (const tok of key.split(/[^a-z0-9]+/g).filter(Boolean)) {
+          if (tok.length >= 4 && textLower.includes(tok)) score += 1;
+        }
+      }
+    }
+    for (const tok of `${o.description} ${o.criterionName}`.toLowerCase().split(/[^a-z0-9]+/g).filter(Boolean)) {
+      if (tok.length >= 5 && textLower.includes(tok)) score += 1;
+    }
+    return { score, matched };
+  };
+
+  const runLocalFileAnalysis = async () => {
+    if (localAnalysisFiles.length === 0) {
+      setAnalysisHint(true);
+      return;
+    }
+
+    setLocalAnalysis({ status: 'running', progress: 0 });
+    setIsAnalyzing(true);
+    setAnalysisHint(false);
+
+    try {
+      const docs: { file: File; text: string }[] = [];
+      const total = localAnalysisFiles.length;
+
+      for (let idx = 0; idx < localAnalysisFiles.length; idx += 1) {
+        const f = localAnalysisFiles[idx]!;
+        const name = f.name;
+        const isPdf = /\.pdf$/i.test(name);
+        const isImage = /\.(png|jpe?g|webp)$/i.test(name);
+
+        let extracted = '';
+        if (isPdf) {
+          extracted = await extractPdfText(f, 3);
+          if ((extracted ?? '').trim().length < 200) {
+            // Best effort OCR for scanned docs.
+            try {
+              const ocr = await ocrPdfText(f, 2);
+              extracted = `${extracted}\n\n${ocr}`.trim();
+            } catch {
+              // Ignore OCR errors; keep base extract.
+            }
+          }
+        } else if (isImage) {
+          extracted = await ocrImageText(f);
+        } else {
+          extracted = '';
+        }
+
+        const combined = `${name}\n${extracted}`.trim();
+        docs.push({ file: f, text: combined });
+        setLocalAnalysis({ status: 'running', progress: (idx + 1) / total });
+      }
+
+      // Assign each doc to best indicator by content.
+      const byIndicator = new Map<string, { name: string; year: string; score: number }[]>();
+      for (const d of docs) {
+        const textLower = d.text.toLowerCase();
+        let best: { id: string; score: number } | null = null;
+
+        for (const opt of allIndicatorOptions) {
+          const s = scoreIndicatorForText(opt, textLower).score;
+          if (s <= 0) continue;
+          if (!best || s > best.score) best = { id: opt.indicator.toLowerCase(), score: s };
+        }
+
+        if (!best) continue;
+        const arr = byIndicator.get(best.id) ?? [];
+        arr.push({ name: d.file.name, year: inferYearFromName(d.file.name), score: best.score });
+        byIndicator.set(best.id, arr);
+      }
+
+      // Build results for the whole matrix.
+      const nextResults: IndicatorAnalysis[] = allIndicatorOptions.map((o) => {
+        const indicatorId = o.indicator.toLowerCase();
+        const docsFor = byIndicator.get(indicatorId) ?? [];
+        const found = docsFor.length;
+        const required = o.requiredDocs.length;
+        const state: 'Completo' | 'Parcial' | 'Débil' =
+          found <= 0 ? 'Débil' : required > 0 && found >= required ? 'Completo' : 'Parcial';
+
+        const complianceLevel = state === 'Completo' ? 'Alto' : state === 'Parcial' ? 'Medio' : 'Bajo';
+
+        return {
+          indicator: o.indicator,
+          description: o.description,
+          documents: docsFor.map((d) => ({
+            name: d.name,
+            type: 'Evidencial',
+            year: d.year,
+            focus: 'medio',
+            status: 'vigente',
+            link: '',
+          })),
+          technicalAnalysis: {
+            complianceLevel,
+            mathCoherence: 'N/A (modo local)',
+            resourceUsage: 'N/A (modo local)',
+            observations:
+              'Modo local: se asignaron archivos por coincidencias de contenido (requiredDocs + descripciones).',
+          },
+          history: 'N/A (modo local)',
+          gaps:
+            state === 'Débil'
+              ? ['No se detectaron archivos que correspondan a este indicador.']
+              : [],
+          recommendations:
+            state === 'Débil'
+              ? ['Subir/registrar evidencias para este indicador.']
+              : ['Revisar consistencia y pertinencia de las evidencias asignadas.'],
+          finalSummary:
+            state === 'Completo'
+              ? 'Cobertura suficiente según los archivos analizados.'
+              : state === 'Parcial'
+                ? 'Cobertura parcial según los archivos analizados.'
+                : 'Cobertura débil según los archivos analizados.',
+          state,
+        };
+      });
+
+      setResults(nextResults);
+      setSelectedIndicator(nextResults[0] || null);
+      setActiveTab('dashboard');
+      setLocalAnalysis({ status: 'done', progress: 1 });
+    } catch (err: any) {
+      setLocalAnalysis({ status: 'error', progress: 0, error: String(err?.message || err) });
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
 
   const pendingCatalogItems: CatalogItem[] = pendingEvidence.map((p) => ({
     name: p.generatedName,
@@ -555,6 +721,18 @@ export default function App() {
           </div>
 
           <div className="p-3 border-t border-slate-100">
+            <button
+              onClick={() => {
+                logout();
+                setAuthedUser('');
+              }}
+              className="w-full flex items-center justify-center gap-2 text-slate-400 hover:text-rose-900 hover:bg-rose-50 py-2 rounded-md text-[10px] font-bold uppercase transition-all"
+              title="Cerrar sesión"
+            >
+              <Settings className="w-3 h-3" />
+              Cerrar Sesión
+            </button>
+
             <button 
               onClick={clearSession}
               className="w-full flex items-center justify-center gap-2 text-slate-400 hover:text-red-500 hover:bg-red-50 py-2 rounded-md text-[10px] font-bold uppercase transition-all"
@@ -582,7 +760,7 @@ export default function App() {
                     <p className="text-xs text-slate-500 font-medium">Ingrese la nomenclatura estandarizada de los archivos del repositorio institucional.</p>
                     {analysisHint && results.length === 0 && (
                       <div className="mt-3 text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 inline-block">
-                        Para habilitar Panel, Buscador y Matriz: pegá la lista y presioná "Ejecutar Análisis".
+                        Para habilitar Panel, Buscador y Matriz: pegá la lista o subí archivos locales y presioná "Ejecutar Análisis".
                       </div>
                     )}
                   </div>
@@ -624,6 +802,54 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                     placeholder="[CRI]_[ANX]_[IND]_[NUM]_[DESC] ..."
                     className="flex-1 w-full p-6 text-xs font-mono bg-white resize-none outline-none focus:bg-slate-50/30 transition-colors leading-relaxed"
                   />
+
+                  <div className="px-4 pb-4">
+                    <div className="rounded-xl border border-slate-200 bg-white p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Opción: Analizar Archivos Locales</div>
+                        <div className={cn(
+                          'text-[10px] font-black uppercase tracking-widest',
+                          localAnalysis.status === 'running'
+                            ? 'text-amber-700'
+                            : localAnalysis.status === 'done'
+                              ? 'text-green-700'
+                              : localAnalysis.status === 'error'
+                                ? 'text-red-700'
+                                : 'text-slate-400'
+                        )}>
+                          {localAnalysis.status === 'running'
+                            ? `Leyendo (${Math.round(localAnalysis.progress * 100)}%)`
+                            : localAnalysis.status === 'done'
+                              ? 'OK'
+                              : localAnalysis.status === 'error'
+                                ? 'Error'
+                                : 'Idle'}
+                        </div>
+                      </div>
+
+                      <div className="mt-2 flex items-center gap-3">
+                        <input
+                          type="file"
+                          multiple
+                          onChange={(e) => {
+                            const files = Array.from(e.target.files ?? []);
+                            setLocalAnalysisFiles(files);
+                            setLocalAnalysis({ status: 'idle', progress: 0 });
+                          }}
+                          className="block w-full text-xs text-slate-600 file:mr-3 file:rounded-lg file:border file:border-slate-200 file:bg-slate-50 file:px-3 file:py-1.5 file:text-[10px] file:font-black file:uppercase file:tracking-widest file:text-slate-700 hover:file:bg-slate-100"
+                          accept=".pdf,.png,.jpg,.jpeg,.webp"
+                        />
+                      </div>
+                      <div className="mt-2 text-[10px] text-slate-500 font-semibold">
+                        PDF e imagenes: se extrae texto (OCR si hace falta) y se genera Panel/Matriz.
+                      </div>
+                      {localAnalysis.status === 'error' && (
+                        <div className="mt-2 text-[11px] text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                          Fallo el analisis local: {localAnalysis.error}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                   <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between">
                     <div className="flex gap-6">
                       <div className="flex items-center gap-2">
@@ -636,8 +862,14 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                       </div>
                     </div>
                     <button 
-                      onClick={handleAnalyze}
-                      disabled={isAnalyzing || !inputText.trim()}
+                      onClick={() => {
+                        if (inputText.trim()) {
+                          handleAnalyze();
+                          return;
+                        }
+                        runLocalFileAnalysis();
+                      }}
+                      disabled={isAnalyzing || (!inputText.trim() && localAnalysisFiles.length === 0)}
                       className="bg-slate-900 hover:bg-black text-white px-8 py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest shadow-lg shadow-slate-200 disabled:opacity-50 flex items-center gap-2 transition-all active:scale-95"
                     >
                       {isAnalyzing ? (

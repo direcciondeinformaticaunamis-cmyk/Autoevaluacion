@@ -1,0 +1,192 @@
+import React, { useMemo, useState } from 'react';
+import { motion } from 'motion/react';
+import { Lock, User } from 'lucide-react';
+import { cn } from '../lib/utils';
+
+const ALLOWED_USERS = new Set([
+  'direccion',
+  'secretaria',
+  'coordinacion_academica',
+  'soporte_tecnologico',
+  'coordinador_ead',
+  'administrativo_ead',
+  'director_informatica',
+]);
+
+const TEMP_PASSWORD = 'Unamis2026*';
+
+export function isAuthenticated(): boolean {
+  try {
+    const raw = localStorage.getItem('unamis_auth');
+    if (!raw) return false;
+    const parsed = JSON.parse(raw);
+    return Boolean(parsed?.ok && typeof parsed?.user === 'string' && ALLOWED_USERS.has(parsed.user));
+  } catch {
+    return false;
+  }
+}
+
+export function logout() {
+  localStorage.removeItem('unamis_auth');
+}
+
+export default function Login({
+  logoSrc,
+  onAuthed,
+}: {
+  logoSrc: string;
+  onAuthed: (user: string) => void;
+}) {
+  const [user, setUser] = useState('');
+  const [pass, setPass] = useState('');
+  const [error, setError] = useState<string>('');
+
+  const normalizedUser = useMemo(() => user.trim().toLowerCase(), [user]);
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+
+    if (!ALLOWED_USERS.has(normalizedUser)) {
+      setError('Usuario no habilitado.');
+      return;
+    }
+    if (pass !== TEMP_PASSWORD) {
+      setError('Contraseña incorrecta.');
+      return;
+    }
+
+    localStorage.setItem('unamis_auth', JSON.stringify({ ok: true, user: normalizedUser, ts: Date.now() }));
+    onAuthed(normalizedUser);
+  };
+
+  return (
+    <div className="min-h-screen w-full bg-slate-950 text-white overflow-hidden">
+      <div className="absolute inset-0">
+        <motion.div
+          aria-hidden
+          initial={{ opacity: 0, scale: 0.98 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.6 }}
+          className="absolute -top-28 -left-28 h-80 w-80 rounded-full bg-rose-700/30 blur-3xl"
+        />
+        <motion.div
+          aria-hidden
+          initial={{ opacity: 0, x: 40 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.8, delay: 0.1 }}
+          className="absolute top-32 -right-24 h-96 w-96 rounded-full bg-fuchsia-500/20 blur-3xl"
+        />
+        <motion.div
+          aria-hidden
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, delay: 0.15 }}
+          className="absolute bottom-0 left-1/2 h-72 w-[42rem] -translate-x-1/2 rounded-[999px] bg-slate-700/20 blur-3xl"
+        />
+        <div aria-hidden className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(255,255,255,0.06)_1px,transparent_0)] [background-size:18px_18px] opacity-60" />
+      </div>
+
+      <div className="relative mx-auto flex min-h-screen w-full max-w-6xl items-center px-6 py-10">
+        <div className="grid w-full grid-cols-1 gap-10 lg:grid-cols-2 lg:gap-16">
+          <motion.section
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="flex flex-col justify-center"
+          >
+            <div className="flex items-center gap-4">
+              <div className="rounded-2xl bg-white/5 p-2 ring-1 ring-white/10">
+                <img src={logoSrc} alt="UNAMIS" className="h-10 w-10 object-contain" />
+              </div>
+              <div>
+                <div className="text-xs font-black tracking-[0.32em] text-rose-200 uppercase">UNAMIS</div>
+                <div className="text-lg font-black tracking-tight">Plataforma de Autoevaluación</div>
+              </div>
+            </div>
+
+            <div className="mt-8 max-w-xl">
+              <h1 className="text-3xl font-black tracking-tight">Ingreso al panel de evidencias</h1>
+              <p className="mt-3 text-sm text-slate-200/90 font-medium leading-relaxed">
+                Acceso restringido por usuario. Ingresá con tu credencial institucional.
+              </p>
+            </div>
+
+            <div className="mt-10 flex flex-wrap gap-2 text-[10px] font-black tracking-widest uppercase text-slate-200/70">
+              <span className="rounded-full bg-white/5 ring-1 ring-white/10 px-3 py-1">Matriz oficial</span>
+              <span className="rounded-full bg-white/5 ring-1 ring-white/10 px-3 py-1">Catálogo Drive</span>
+              <span className="rounded-full bg-white/5 ring-1 ring-white/10 px-3 py-1">OCR y sugerencias</span>
+            </div>
+          </motion.section>
+
+          <motion.section
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.55, delay: 0.05 }}
+            className="flex items-center justify-center"
+          >
+            <div className="w-full max-w-md rounded-3xl bg-white/6 ring-1 ring-white/10 backdrop-blur-xl shadow-[0_20px_80px_rgba(0,0,0,0.35)] overflow-hidden">
+              <div className="px-7 py-6 border-b border-white/10">
+                <div className="text-[10px] font-black tracking-[0.28em] uppercase text-rose-200">Acceso</div>
+                <div className="mt-1 text-sm font-black">Iniciar sesión</div>
+              </div>
+
+              <form onSubmit={submit} className="px-7 py-6 space-y-4">
+                <label className="block">
+                  <div className="text-[10px] font-black tracking-widest uppercase text-slate-200/70">Usuario</div>
+                  <div className="mt-2 relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-200/60" />
+                    <input
+                      value={user}
+                      onChange={(e) => setUser(e.target.value)}
+                      placeholder="ej: direccion"
+                      autoComplete="username"
+                      className={cn(
+                        'w-full rounded-2xl bg-white/5 ring-1 ring-white/10 px-10 py-3 text-sm outline-none placeholder:text-slate-200/30',
+                        'focus:ring-2 focus:ring-rose-400/60'
+                      )}
+                    />
+                  </div>
+                </label>
+
+                <label className="block">
+                  <div className="text-[10px] font-black tracking-widest uppercase text-slate-200/70">Contraseña</div>
+                  <div className="mt-2 relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-200/60" />
+                    <input
+                      value={pass}
+                      onChange={(e) => setPass(e.target.value)}
+                      type="password"
+                      autoComplete="current-password"
+                      className={cn(
+                        'w-full rounded-2xl bg-white/5 ring-1 ring-white/10 px-10 py-3 text-sm outline-none',
+                        'focus:ring-2 focus:ring-rose-400/60'
+                      )}
+                    />
+                  </div>
+                </label>
+
+                {error && (
+                  <div className="text-xs font-semibold text-rose-200 bg-rose-500/10 ring-1 ring-rose-400/20 rounded-2xl px-4 py-3">
+                    {error}
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  className="w-full rounded-2xl bg-rose-600 hover:bg-rose-500 active:bg-rose-600 transition-colors text-white font-black uppercase tracking-widest text-[11px] py-3 shadow-[0_10px_30px_rgba(244,63,94,0.22)]"
+                >
+                  Ingresar
+                </button>
+
+                <div className="text-[10px] text-slate-200/55 font-semibold leading-relaxed">
+                  Tip: el usuario es sin espacios, en minúsculas.
+                </div>
+              </form>
+            </div>
+          </motion.section>
+        </div>
+      </div>
+    </div>
+  );
+}
