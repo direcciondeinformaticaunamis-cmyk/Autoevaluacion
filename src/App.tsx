@@ -24,6 +24,7 @@ import {
   Filter,
   Download,
   Database,
+  Bot,
   PieChart as PieIcon,
   LineChart as LineIcon
 } from 'lucide-react';
@@ -54,6 +55,7 @@ export default function App() {
   const [selectedIndicator, setSelectedIndicator] = useState<IndicatorAnalysis | null>(null);
   const [activeTab, setActiveTab] = useState<'input' | 'dashboard' | 'matrix' | 'catalog' | 'results' | 'search' | 'upload'>('input');
   const [searchTerm, setSearchTerm] = useState('');
+  const [analysisHint, setAnalysisHint] = useState(false);
   
   // Advanced Search Filters
   const [filterType, setFilterType] = useState<string>('all');
@@ -142,6 +144,7 @@ export default function App() {
   const handleAnalyze = async () => {
     if (!inputText.trim()) return;
     setIsAnalyzing(true);
+    setAnalysisHint(false);
     try {
       const analysis = await analyzeDocuments(inputText);
       setResults(analysis);
@@ -342,6 +345,7 @@ export default function App() {
     setInputText('');
     setSelectedIndicator(null);
     setActiveTab('input');
+    setAnalysisHint(false);
   };
 
   const calculateProgress = () => {
@@ -407,32 +411,65 @@ export default function App() {
                 Carga
               </button>
               <button 
-                onClick={() => setActiveTab('dashboard')}
-                disabled={results.length === 0}
+                onClick={() => {
+                  if (results.length === 0) {
+                    setAnalysisHint(true);
+                    setActiveTab('input');
+                    return;
+                  }
+                  setActiveTab('dashboard');
+                }}
                 className={cn(
                   "flex-1 px-3 py-1.5 rounded-md text-[10px] font-bold uppercase transition-all border",
-                  activeTab === 'dashboard' ? "bg-rose-800 text-white border-rose-900 shadow-sm" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50 disabled:opacity-50"
+                  activeTab === 'dashboard'
+                    ? "bg-rose-800 text-white border-rose-900 shadow-sm"
+                    : results.length === 0
+                      ? "bg-white text-slate-600 border-slate-200 opacity-50"
+                      : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
                 )}
+                title={results.length === 0 ? 'Pegá la lista de archivos y ejecutá análisis para habilitar.' : 'Abrir panel'}
               >
                 Panel
               </button>
               <button 
-                onClick={() => setActiveTab('search')}
-                disabled={results.length === 0}
+                onClick={() => {
+                  if (results.length === 0) {
+                    setAnalysisHint(true);
+                    setActiveTab('input');
+                    return;
+                  }
+                  setActiveTab('search');
+                }}
                 className={cn(
                   "flex-1 px-3 py-1.5 rounded-md text-[10px] font-bold uppercase transition-all border",
-                  activeTab === 'search' ? "bg-rose-800 text-white border-rose-900 shadow-sm" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50 disabled:opacity-50"
+                  activeTab === 'search'
+                    ? "bg-rose-800 text-white border-rose-900 shadow-sm"
+                    : results.length === 0
+                      ? "bg-white text-slate-600 border-slate-200 opacity-50"
+                      : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
                 )}
+                title={results.length === 0 ? 'Pegá la lista de archivos y ejecutá análisis para habilitar.' : 'Abrir buscador'}
               >
                 Buscador
               </button>
               <button 
-                onClick={() => setActiveTab('matrix')}
-                disabled={results.length === 0}
+                onClick={() => {
+                  if (results.length === 0) {
+                    setAnalysisHint(true);
+                    setActiveTab('input');
+                    return;
+                  }
+                  setActiveTab('matrix');
+                }}
                 className={cn(
                   "flex-1 px-3 py-1.5 rounded-md text-[10px] font-bold uppercase transition-all border",
-                  activeTab === 'matrix' ? "bg-rose-800 text-white border-rose-900 shadow-sm" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50 disabled:opacity-50"
+                  activeTab === 'matrix'
+                    ? "bg-rose-800 text-white border-rose-900 shadow-sm"
+                    : results.length === 0
+                      ? "bg-white text-slate-600 border-slate-200 opacity-50"
+                      : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
                 )}
+                title={results.length === 0 ? 'Pegá la lista de archivos y ejecutá análisis para habilitar.' : 'Abrir matriz'}
               >
                 Matriz
               </button>
@@ -529,7 +566,7 @@ export default function App() {
         </aside>
 
         {/* Main Content Panel */}
-        <main className="flex-1 p-5 overflow-hidden flex flex-col gap-5">
+        <main className="flex-1 p-5 overflow-hidden flex flex-col gap-5 min-h-0">
           <AnimatePresence mode="wait">
             {activeTab === 'input' && (
               <motion.div 
@@ -543,6 +580,11 @@ export default function App() {
                   <div>
                     <h2 className="text-xl font-black tracking-tight text-slate-800">CENTRAL DE CARGA DE EVIDENCIAS</h2>
                     <p className="text-xs text-slate-500 font-medium">Ingrese la nomenclatura estandarizada de los archivos del repositorio institucional.</p>
+                    {analysisHint && results.length === 0 && (
+                      <div className="mt-3 text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 inline-block">
+                        Para habilitar Panel, Buscador y Matriz: pegá la lista y presioná "Ejecutar Análisis".
+                      </div>
+                    )}
                   </div>
                   {import.meta.env.DEV && (
                     <button 
@@ -1008,7 +1050,7 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                 key="upload"
                 initial={{ opacity: 0, scale: 0.98 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="flex-1 flex flex-col max-w-4xl mx-auto w-full gap-8 py-10"
+                className="flex-1 flex flex-col max-w-4xl mx-auto w-full gap-8 py-8 overflow-y-auto min-h-0 pr-1"
               >
                 <div className="text-center">
                   <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tight mb-2">Asociación de Nuevas Evidencias</h2>
@@ -1063,85 +1105,109 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                       </div>
 
                       <div className="mb-3">
-                        <div className="flex items-center justify-between px-1 mb-2 gap-3">
-                           <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Lectura de archivo</div>
-                           <div className="flex items-center gap-2">
-                             {previewUrl && uploadFiles[0] && (
-                               <a
-                                 href={previewUrl}
-                                 target="_blank"
-                                 rel="noreferrer"
-                                 className="text-[10px] font-black uppercase tracking-widest text-rose-800 hover:text-rose-950"
-                                 title="Abrir vista previa en nueva pestaña"
-                               >
-                                 Abrir
-                               </a>
-                             )}
-                           <div className={cn(
-                             'text-[10px] font-black uppercase tracking-widest',
-                             pdfExtract.status === 'reading'
-                               ? 'text-amber-700'
-                               : pdfExtract.status === 'done'
-                                 ? 'text-green-700'
-                                 : pdfExtract.status === 'error'
-                                   ? 'text-red-700'
-                                   : 'text-slate-400'
-                           )}>
-                             {pdfExtract.status === 'reading'
-                               ? 'Leyendo...'
-                               : pdfExtract.status === 'done'
-                                 ? 'OK'
-                                 : pdfExtract.status === 'error'
-                                   ? 'Error'
-                                   : 'Idle'}
-                           </div>
-                           </div>
-                         </div>
-                        {pdfExtract.status === 'error' ? (
-                          <div className="text-[11px] text-red-700 bg-red-50 border border-red-100 rounded-xl p-3">
-                            No se pudo leer el PDF. Si el PDF es escaneado (imagen), no tendrá texto para extraer.
-                          </div>
-                        ) : (
-                          <div className="text-[11px] text-slate-700 bg-white border border-slate-200 rounded-xl p-3 max-h-28 overflow-y-auto">
-                            {pdfExtract.text ? pdfExtract.text.slice(0, 1200) : 'Seleccioná un PDF o imagen para extraer texto y mejorar la sugerencia.'}
-                          </div>
-                        )}
+                        <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-sm">
+                          <div className="flex items-start gap-3">
+                            <div className="shrink-0 mt-0.5">
+                              <div className="w-9 h-9 rounded-xl bg-rose-50 border border-rose-100 flex items-center justify-center">
+                                <Bot className="w-4 h-4 text-rose-800" />
+                              </div>
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Asistente</div>
+                                <div className="flex items-center gap-2">
+                                  {previewUrl && uploadFiles[0] && (
+                                    <a
+                                      href={previewUrl}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="text-[10px] font-black uppercase tracking-widest text-rose-800 hover:text-rose-950"
+                                      title="Abrir vista previa en nueva pestaña"
+                                    >
+                                      Abrir
+                                    </a>
+                                  )}
+                                  <div className={cn(
+                                    'text-[10px] font-black uppercase tracking-widest',
+                                    pdfExtract.status === 'reading'
+                                      ? 'text-amber-700'
+                                      : pdfExtract.status === 'done'
+                                        ? 'text-green-700'
+                                        : pdfExtract.status === 'error'
+                                          ? 'text-red-700'
+                                          : 'text-slate-400'
+                                  )}>
+                                    {pdfExtract.status === 'reading'
+                                      ? 'Leyendo'
+                                      : pdfExtract.status === 'done'
+                                        ? 'Listo'
+                                        : pdfExtract.status === 'error'
+                                          ? 'Error'
+                                          : 'Idle'}
+                                  </div>
+                                </div>
+                              </div>
 
-                        {pdfExtract.status === 'done' && (
-                          pdfExtract.text.trim().length >= 120 ? (
-                            <div className="mt-2 text-[10px] font-semibold text-green-700 bg-green-50 border border-green-100 rounded-lg px-3 py-2">
-                              Lectura OK. El asistente ya puede sugerir indicador.
-                            </div>
-                          ) : (
-                            <div className="mt-2 text-[10px] font-semibold text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
-                              Lectura débil (poco texto). Si es escaneado, el OCR puede tardar o fallar sin Internet.
-                            </div>
-                          )
-                        )}
+                              <div className="mt-2 rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2">
+                                {pdfExtract.status === 'idle' && (
+                                  <div className="text-[11px] text-slate-600 font-medium">
+                                    Subí un PDF o imagen. Voy a leerlo (OCR si hace falta) y te voy a sugerir el indicador.
+                                  </div>
+                                )}
+                                {pdfExtract.status === 'reading' && (
+                                  <div className="text-[11px] text-amber-800 font-semibold">
+                                    Leyendo contenido...
+                                  </div>
+                                )}
+                                {pdfExtract.status === 'error' && (
+                                  <div className="text-[11px] text-red-700 font-semibold">
+                                    No pude leer el archivo. Si es escaneado, el OCR puede fallar sin Internet.
+                                  </div>
+                                )}
+                                {pdfExtract.status === 'done' && (
+                                  <div className={cn(
+                                    'text-[11px] font-semibold',
+                                    pdfExtract.text.trim().length >= 120 ? 'text-green-700' : 'text-amber-800'
+                                  )}>
+                                    {pdfExtract.text.trim().length >= 120
+                                      ? 'Lectura OK. Ya puedo sugerir indicador.'
+                                      : 'Lectura débil (poco texto). Si es escaneado, esperá el OCR.'}
+                                  </div>
+                                )}
+                              </div>
 
-                        {ocrState.status !== 'idle' && (
-                          <div className="mt-3">
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">OCR</div>
-                              <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">{Math.round(ocrState.progress * 100)}%</div>
+                              {pdfExtract.status !== 'idle' && (
+                                <div className="mt-2 text-[11px] text-slate-700 bg-white border border-slate-200 rounded-xl p-3 max-h-28 overflow-y-auto">
+                                  {pdfExtract.text ? pdfExtract.text.slice(0, 1200) : '...'}
+                                </div>
+                              )}
+
+                              {ocrState.status !== 'idle' && (
+                                <div className="mt-2">
+                                  <div className="flex items-center justify-between">
+                                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">OCR</div>
+                                    <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">{Math.round(ocrState.progress * 100)}%</div>
+                                  </div>
+                                  {ocrState.status === 'error' && (
+                                    <div className="mt-2 text-[11px] text-red-700 bg-red-50 border border-red-100 rounded-xl p-3">
+                                      Falló OCR: {ocrState.error}
+                                    </div>
+                                  )}
+                                  {ocrState.status === 'running' && (
+                                    <div className="mt-2 h-1.5 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
+                                      <div className="h-full bg-rose-700" style={{ width: `${Math.round(ocrState.progress * 100)}%` }} />
+                                    </div>
+                                  )}
+                                  {(ocrState.status === 'running' || ocrState.status === 'done') && (
+                                    <div className="mt-2 text-[10px] text-slate-500 font-semibold">
+                                      Nota: OCR necesita Internet (descarga motor/idioma) y puede tardar.
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                             </div>
-                            {ocrState.status === 'error' && (
-                              <div className="text-[11px] text-red-700 bg-red-50 border border-red-100 rounded-xl p-3">
-                                Falló OCR: {ocrState.error}
-                              </div>
-                            )}
-                            {ocrState.status === 'running' && (
-                              <div className="mt-2 h-1.5 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
-                                <div className="h-full bg-rose-700" style={{ width: `${Math.round(ocrState.progress * 100)}%` }} />
-                              </div>
-                            )}
-                            {(ocrState.status === 'running' || ocrState.status === 'done') && (
-                              <div className="mt-2 text-[10px] text-slate-500 font-semibold">
-                                Nota: OCR necesita Internet (descarga motor/idioma) y puede tardar.
-                              </div>
-                            )}
                           </div>
-                        )}
+                        </div>
                       </div>
 
                       {suggestions.length > 0 && !selectedIndicatorForUpload && (
