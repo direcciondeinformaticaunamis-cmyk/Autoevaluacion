@@ -56,7 +56,7 @@ export default function App() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [results, setResults] = useState<IndicatorAnalysis[]>([]);
   const [selectedIndicator, setSelectedIndicator] = useState<IndicatorAnalysis | null>(null);
-  const [activeTab, setActiveTab] = useState<'input' | 'dashboard' | 'matrix' | 'catalog' | 'results' | 'search' | 'upload'>('upload');
+  const [activeTab, setActiveTab] = useState<'input' | 'dashboard' | 'matrix' | 'catalog' | 'results' | 'search' | 'upload'>('input');
   const [searchTerm, setSearchTerm] = useState('');
   const [analysisHint, setAnalysisHint] = useState(false);
 
@@ -515,7 +515,7 @@ export default function App() {
     setResults([]);
     setInputText('');
     setSelectedIndicator(null);
-    setActiveTab('upload');
+    setActiveTab('input');
     setAnalysisHint(false);
   };
 
@@ -573,20 +573,20 @@ export default function App() {
           <div className="p-3 bg-slate-50 border-b border-slate-200 space-y-3">
             <div className="grid grid-cols-3 gap-1">
               <button 
-                onClick={() => setActiveTab('upload')}
+                onClick={() => setActiveTab('input')}
                 className={cn(
                   "flex-1 px-3 py-1.5 rounded-md text-[10px] font-bold uppercase transition-all border",
-                  activeTab === 'upload' ? "bg-rose-800 text-white border-rose-900 shadow-sm" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                  activeTab === 'input' ? "bg-rose-800 text-white border-rose-900 shadow-sm" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
                 )}
-                title="Subir evidencias y generar análisis"
+                title="Cargar evidencias y ejecutar análisis"
               >
-                Subir
+                Carga
               </button>
               <button 
                 onClick={() => {
                   if (results.length === 0) {
                     setAnalysisHint(true);
-                    setActiveTab('upload');
+                    setActiveTab('input');
                     return;
                   }
                   setActiveTab('dashboard');
@@ -607,7 +607,7 @@ export default function App() {
                 onClick={() => {
                   if (results.length === 0) {
                     setAnalysisHint(true);
-                    setActiveTab('upload');
+                    setActiveTab('input');
                     return;
                   }
                   setActiveTab('search');
@@ -628,7 +628,7 @@ export default function App() {
                 onClick={() => {
                   if (results.length === 0) {
                     setAnalysisHint(true);
-                    setActiveTab('upload');
+                    setActiveTab('input');
                     return;
                   }
                   setActiveTab('matrix');
@@ -800,49 +800,59 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
 
                   <div className="px-4 pb-4">
                     <div className="rounded-xl border border-slate-200 bg-white p-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Opción: Analizar Archivos Locales</div>
-                        <div className={cn(
-                          'text-[10px] font-black uppercase tracking-widest',
-                          localAnalysis.status === 'running'
-                            ? 'text-amber-700'
-                            : localAnalysis.status === 'done'
-                              ? 'text-green-700'
-                              : localAnalysis.status === 'error'
-                                ? 'text-red-700'
-                                : 'text-slate-400'
-                        )}>
-                          {localAnalysis.status === 'running'
-                            ? `Leyendo (${Math.round(localAnalysis.progress * 100)}%)`
-                            : localAnalysis.status === 'done'
-                              ? 'OK'
-                              : localAnalysis.status === 'error'
-                                ? 'Error'
-                                : 'Idle'}
+                      <div className="flex items-start gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-rose-50 border border-rose-100 flex items-center justify-center shrink-0">
+                          <Bot className="w-4 h-4 text-rose-800" />
                         </div>
-                      </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Asistente de análisis local</div>
+                            <div className={cn(
+                              'text-[10px] font-black uppercase tracking-widest',
+                              localAnalysis.status === 'running'
+                                ? 'text-amber-700'
+                                : localAnalysis.status === 'done'
+                                  ? 'text-green-700'
+                                  : localAnalysis.status === 'error'
+                                    ? 'text-red-700'
+                                    : 'text-slate-400'
+                            )}>
+                              {localAnalysis.status === 'running'
+                                ? `Leyendo (${Math.round(localAnalysis.progress * 100)}%)`
+                                : localAnalysis.status === 'done'
+                                  ? 'OK'
+                                  : localAnalysis.status === 'error'
+                                    ? 'Error'
+                                    : 'Idle'}
+                            </div>
+                          </div>
 
-                      <div className="mt-2 flex items-center gap-3">
-                        <input
-                          type="file"
-                          multiple
-                          onChange={(e) => {
-                            const files = Array.from(e.target.files ?? []);
-                            setLocalAnalysisFiles(files);
-                            setLocalAnalysis({ status: 'idle', progress: 0 });
-                          }}
-                          className="block w-full text-xs text-slate-600 file:mr-3 file:rounded-lg file:border file:border-slate-200 file:bg-slate-50 file:px-3 file:py-1.5 file:text-[10px] file:font-black file:uppercase file:tracking-widest file:text-slate-700 hover:file:bg-slate-100"
-                          accept=".pdf,.png,.jpg,.jpeg,.webp"
-                        />
-                      </div>
-                      <div className="mt-2 text-[10px] text-slate-500 font-semibold">
-                        PDF e imagenes: se extrae texto (OCR si hace falta) y se genera Panel/Matriz.
-                      </div>
-                      {localAnalysis.status === 'error' && (
-                        <div className="mt-2 text-[11px] text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
-                          Fallo el analisis local: {localAnalysis.error}
+                          <div className="mt-2 text-[11px] text-slate-700 bg-slate-50 border border-slate-100 rounded-xl px-3 py-2">
+                            {localAnalysisFiles.length > 0
+                              ? `${localAnalysisFiles.length} archivo(s) listo(s). Al ejecutar análisis voy a leer PDF/imagen, aplicar OCR si hace falta y generar Panel/Matriz.`
+                              : 'Elegí PDF o imágenes aquí. Al presionar Ejecutar Análisis voy a leer el contenido y asignar indicadores automáticamente.'}
+                          </div>
+
+                          <div className="mt-3 flex items-center gap-3">
+                            <input
+                              type="file"
+                              multiple
+                              onChange={(e) => {
+                                const files = Array.from(e.target.files ?? []);
+                                setLocalAnalysisFiles(files);
+                                setLocalAnalysis({ status: 'idle', progress: 0 });
+                              }}
+                              className="block w-full text-xs text-slate-600 file:mr-3 file:rounded-lg file:border file:border-slate-200 file:bg-slate-50 file:px-3 file:py-1.5 file:text-[10px] file:font-black file:uppercase file:tracking-widest file:text-slate-700 hover:file:bg-slate-100"
+                              accept=".pdf,.png,.jpg,.jpeg,.webp"
+                            />
+                          </div>
+                          {localAnalysis.status === 'error' && (
+                            <div className="mt-2 text-[11px] text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                              Fallo el analisis local: {localAnalysis.error}
+                            </div>
+                          )}
                         </div>
-                      )}
+                      </div>
                     </div>
                   </div>
                   <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between">
