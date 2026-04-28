@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   FileSearch, 
   BarChart3, 
@@ -43,7 +43,7 @@ import {
   removePendingEvidence,
 } from './services/pendingEvidenceStore';
 import { buildMaxAnexoByCriterion, nextAnexoForCriterion } from './services/anexoSequencer';
-import { extractPdfText, ocrPdfText } from './services/pdfText';
+import { extractPdfText, ocrImageText, ocrPdfText } from './services/pdfText';
 import { cn } from './lib/utils';
 import unamisLogo from './img/LOGO UNAMIS WEB 2 (3).png';
 
@@ -75,6 +75,14 @@ export default function App() {
     progress: 0,
   });
 
+  const [previewUrl, setPreviewUrl] = useState<string>('');
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
+
   const [pendingEvidence, setPendingEvidence] = useState(() => loadPendingEvidence());
 
   const allIndicatorOptions = OFFICIAL_MATRIX.flatMap((d) =>
@@ -95,10 +103,14 @@ export default function App() {
     .map((o) => {
       let score = 0;
       const hay = suggestionText;
+      const matched: string[] = [];
       // Required docs are the strongest signals.
       for (const req of o.requiredDocs) {
         const key = String(req).toLowerCase();
-        if (key && hay.includes(key)) score += 6;
+        if (key && hay.includes(key)) {
+          score += 6;
+          matched.push(req);
+        }
         else {
           // Partial token hits.
           for (const tok of key.split(/[^a-z0-9]+/g).filter(Boolean)) {
@@ -110,7 +122,7 @@ export default function App() {
       for (const tok of `${o.description} ${o.criterionName}`.toLowerCase().split(/[^a-z0-9]+/g).filter(Boolean)) {
         if (tok.length >= 5 && hay.includes(tok)) score += 1;
       }
-      return { ...o, score };
+      return { ...o, score, matched };
     })
     .filter((x) => x.score > 0)
     .sort((a, b) => b.score - a.score)
@@ -185,16 +197,59 @@ export default function App() {
 
       const first = files[0];
       if (!first) return;
-      if (!/\.pdf$/i.test(first.name)) {
+
+      setPreviewUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return URL.createObjectURL(first);
+      });
+
+      setOcrState({ status: 'idle', progress: 0 });
+
+      const name = first.name;
+      const isPdf = /\.pdf$/i.test(name);
+      const isImage = /\.(png|jpe?g|webp)$/i.test(name);
+
+      if (!isPdf && !isImage) {
         setPdfExtract({ status: 'idle', text: '' });
         return;
       }
 
       setPdfExtract({ status: 'reading', text: '' });
-      setOcrState({ status: 'idle', progress: 0 });
-      extractPdfText(first, 3)
-        .then((t) => setPdfExtract({ status: 'done', text: t }))
-        .catch((err) => setPdfExtract({ status: 'error', text: '', error: String(err?.message || err) }));
+
+      if (isPdf) {
+        extractPdfText(first, 3)
+          .then(async (t) => {
+            const base = (t ?? '').trim();
+            setPdfExtract({ status: 'done', text: base });
+
+            // Auto-OCR for likely scanned PDFs (no real embedded text).
+            if (base.length < 200) {
+              setOcrState({ status: 'running', progress: 0 });
+              try {
+                const ocr = await ocrPdfText(first, 2, (p) => setOcrState((prev) => ({ ...prev, progress: p })));
+                const merged = `${base}\n\n${ocr}`.trim();
+                setPdfExtract({ status: 'done', text: merged });
+                setOcrState({ status: 'done', progress: 1 });
+              } catch (err: any) {
+                setOcrState({ status: 'error', progress: 0, error: String(err?.message || err) });
+              }
+            }
+          })
+          .catch((err) => setPdfExtract({ status: 'error', text: '', error: String(err?.message || err) }));
+        return;
+      }
+
+      // Image OCR (first image only).
+      setOcrState({ status: 'running', progress: 0 });
+      ocrImageText(first, (p) => setOcrState((prev) => ({ ...prev, progress: p })))
+        .then((t) => {
+          setPdfExtract({ status: 'done', text: t });
+          setOcrState({ status: 'done', progress: 1 });
+        })
+        .catch((err) => {
+          setOcrState({ status: 'error', progress: 0, error: String(err?.message || err) });
+          setPdfExtract({ status: 'error', text: '', error: String(err?.message || err) });
+        });
     }
   };
 
@@ -239,6 +294,10 @@ export default function App() {
     setUploadDescription('');
     setPdfExtract({ status: 'idle', text: '' });
     setOcrState({ status: 'idle', progress: 0 });
+    setPreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return '';
+    });
     setIsUploading(false);
     setActiveTab('catalog');
   };
@@ -1004,77 +1063,83 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                       </div>
 
                       <div className="mb-3">
-                        <div className="flex items-center justify-between px-1 mb-2">
-                          <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Lectura PDF (primeras 3 páginas)</div>
-                          <div className={cn(
-                            'text-[10px] font-black uppercase tracking-widest',
-                            pdfExtract.status === 'reading'
-                              ? 'text-amber-700'
-                              : pdfExtract.status === 'done'
-                                ? 'text-green-700'
-                                : pdfExtract.status === 'error'
-                                  ? 'text-red-700'
-                                  : 'text-slate-400'
-                          )}>
-                            {pdfExtract.status === 'reading'
-                              ? 'Leyendo...'
-                              : pdfExtract.status === 'done'
-                                ? 'OK'
-                                : pdfExtract.status === 'error'
-                                  ? 'Error'
-                                  : 'Idle'}
-                          </div>
-                        </div>
+                        <div className="flex items-center justify-between px-1 mb-2 gap-3">
+                           <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Lectura de archivo</div>
+                           <div className="flex items-center gap-2">
+                             {previewUrl && uploadFiles[0] && (
+                               <a
+                                 href={previewUrl}
+                                 target="_blank"
+                                 rel="noreferrer"
+                                 className="text-[10px] font-black uppercase tracking-widest text-rose-800 hover:text-rose-950"
+                                 title="Abrir vista previa en nueva pestaña"
+                               >
+                                 Abrir
+                               </a>
+                             )}
+                           <div className={cn(
+                             'text-[10px] font-black uppercase tracking-widest',
+                             pdfExtract.status === 'reading'
+                               ? 'text-amber-700'
+                               : pdfExtract.status === 'done'
+                                 ? 'text-green-700'
+                                 : pdfExtract.status === 'error'
+                                   ? 'text-red-700'
+                                   : 'text-slate-400'
+                           )}>
+                             {pdfExtract.status === 'reading'
+                               ? 'Leyendo...'
+                               : pdfExtract.status === 'done'
+                                 ? 'OK'
+                                 : pdfExtract.status === 'error'
+                                   ? 'Error'
+                                   : 'Idle'}
+                           </div>
+                           </div>
+                         </div>
                         {pdfExtract.status === 'error' ? (
                           <div className="text-[11px] text-red-700 bg-red-50 border border-red-100 rounded-xl p-3">
                             No se pudo leer el PDF. Si el PDF es escaneado (imagen), no tendrá texto para extraer.
                           </div>
                         ) : (
-                          <div className="text-[11px] text-slate-600 bg-white border border-slate-200 rounded-xl p-3 max-h-28 overflow-y-auto">
-                            {pdfExtract.text ? pdfExtract.text.slice(0, 1200) : 'Seleccioná un PDF para extraer texto y mejorar la sugerencia.'}
+                          <div className="text-[11px] text-slate-700 bg-white border border-slate-200 rounded-xl p-3 max-h-28 overflow-y-auto">
+                            {pdfExtract.text ? pdfExtract.text.slice(0, 1200) : 'Seleccioná un PDF o imagen para extraer texto y mejorar la sugerencia.'}
                           </div>
                         )}
 
-                        {uploadFiles[0] && /\.pdf$/i.test(uploadFiles[0].name) && pdfExtract.status === 'done' && pdfExtract.text.length < 200 && (
+                        {pdfExtract.status === 'done' && (
+                          pdfExtract.text.trim().length >= 120 ? (
+                            <div className="mt-2 text-[10px] font-semibold text-green-700 bg-green-50 border border-green-100 rounded-lg px-3 py-2">
+                              Lectura OK. El asistente ya puede sugerir indicador.
+                            </div>
+                          ) : (
+                            <div className="mt-2 text-[10px] font-semibold text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                              Lectura débil (poco texto). Si es escaneado, el OCR puede tardar o fallar sin Internet.
+                            </div>
+                          )
+                        )}
+
+                        {ocrState.status !== 'idle' && (
                           <div className="mt-3">
                             <div className="flex items-center justify-between mb-2">
-                              <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">OCR (PDF escaneado)</div>
+                              <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">OCR</div>
                               <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">{Math.round(ocrState.progress * 100)}%</div>
                             </div>
-                            <div className="flex gap-2">
-                              <button
-                                type="button"
-                                disabled={ocrState.status === 'running'}
-                                onClick={() => {
-                                  const f = uploadFiles[0];
-                                  if (!f) return;
-                                  setOcrState({ status: 'running', progress: 0 });
-                                  ocrPdfText(f, 2, (p) => setOcrState((prev) => ({ ...prev, progress: p })))
-                                    .then((t) => {
-                                      setPdfExtract({ status: 'done', text: `${pdfExtract.text}\n\n${t}`.trim() });
-                                      setOcrState({ status: 'done', progress: 1 });
-                                    })
-                                    .catch((err) => {
-                                      setOcrState({ status: 'error', progress: 0, error: String(err?.message || err) });
-                                    });
-                                }}
-                                className="px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest border border-rose-200 bg-white text-rose-900 hover:bg-rose-50/30 disabled:opacity-50"
-                                title="Extrae texto por OCR (más lento)"
-                              >
-                                {ocrState.status === 'running' ? 'OCR en proceso...' : 'Ejecutar OCR (2 páginas)'}
-                              </button>
-                              {ocrState.status === 'error' && (
-                                <div className="text-[11px] text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2 flex-1">
-                                  Falló OCR: {ocrState.error}
-                                </div>
-                              )}
-                            </div>
-                            <div className="mt-2 h-1.5 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
-                              <div className="h-full bg-rose-700" style={{ width: `${Math.round(ocrState.progress * 100)}%` }} />
-                            </div>
-                            <div className="mt-2 text-[10px] text-slate-400 font-semibold">
-                              Nota: OCR necesita Internet (descarga motor/idioma) y puede tardar.
-                            </div>
+                            {ocrState.status === 'error' && (
+                              <div className="text-[11px] text-red-700 bg-red-50 border border-red-100 rounded-xl p-3">
+                                Falló OCR: {ocrState.error}
+                              </div>
+                            )}
+                            {ocrState.status === 'running' && (
+                              <div className="mt-2 h-1.5 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
+                                <div className="h-full bg-rose-700" style={{ width: `${Math.round(ocrState.progress * 100)}%` }} />
+                              </div>
+                            )}
+                            {(ocrState.status === 'running' || ocrState.status === 'done') && (
+                              <div className="mt-2 text-[10px] text-slate-500 font-semibold">
+                                Nota: OCR necesita Internet (descarga motor/idioma) y puede tardar.
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -1090,10 +1155,13 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                                 onClick={() => setSelectedIndicatorForUpload(s.indicator)}
                                 className="text-left rounded-md border border-rose-100 bg-white px-3 py-2 hover:border-rose-300 hover:bg-rose-50/30 transition-colors"
                               >
-                                <div className="text-xs font-black text-rose-900 font-mono">[{s.indicator}] <span className="font-sans font-bold text-slate-700">{s.description}</span></div>
-                                <div className="text-[10px] text-slate-400 font-semibold">Score: {s.score} · Criterio {s.criterionId}</div>
-                              </button>
-                            ))}
+                                 <div className="text-xs font-black text-rose-900 font-mono">[{s.indicator}] <span className="font-sans font-bold text-slate-700">{s.description}</span></div>
+                                 <div className="text-[10px] text-slate-500 font-semibold">
+                                   Score: {s.score} · Criterio {s.criterionId}
+                                   {s.matched.length > 0 ? ` · Coincidencias: ${s.matched.slice(0, 2).join(' / ')}` : ''}
+                                 </div>
+                               </button>
+                             ))}
                           </div>
                         </div>
                       )}

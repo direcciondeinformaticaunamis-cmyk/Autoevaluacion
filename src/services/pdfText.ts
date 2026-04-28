@@ -73,3 +73,27 @@ export async function ocrPdfText(
   onProgress?.(1);
   return out.trim();
 }
+
+export async function ocrImageText(
+  file: File,
+  onProgress?: (p: number) => void
+): Promise<string> {
+  // Keep this aligned with ocrPdfText CDN settings to avoid bundling wasm.
+  const url = URL.createObjectURL(file);
+  try {
+    const { data } = await Tesseract.recognize(url, 'spa', {
+      logger: (m) => {
+        if (m.status === 'recognizing text' && typeof m.progress === 'number') {
+          onProgress?.(Math.max(0, Math.min(1, m.progress)));
+        }
+      },
+      workerPath: 'https://unpkg.com/tesseract.js@5.0.5/dist/worker.min.js',
+      corePath: 'https://unpkg.com/tesseract.js-core@5.0.0/tesseract-core.wasm.js',
+      langPath: 'https://tessdata.projectnaptha.com/4.0.0',
+    });
+    onProgress?.(1);
+    return String(data.text ?? '').trim();
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
