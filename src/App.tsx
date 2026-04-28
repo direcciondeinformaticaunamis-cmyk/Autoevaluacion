@@ -47,18 +47,11 @@ import { buildMaxAnexoByCriterion, nextAnexoForCriterion } from './services/anex
 import { extractPdfText, ocrImageText, ocrPdfText } from './services/pdfText';
 import { cn } from './lib/utils';
 import unamisLogo from './img/LOGO UNAMIS WEB 2 (3).png';
-import Login, { isAuthenticated, logout } from './components/Login';
+import Login from './components/Login';
 
 export default function App() {
-  const [authedUser, setAuthedUser] = useState<string>(() => {
-    if (typeof window === 'undefined') return '';
-    if (!isAuthenticated()) return '';
-    try {
-      return JSON.parse(localStorage.getItem('unamis_auth') || '{}')?.user ?? '';
-    } catch {
-      return '';
-    }
-  });
+  const [authedUser, setAuthedUser] = useState<string>('');
+  const [authChecked, setAuthChecked] = useState(false);
   const [inputText, setInputText] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [results, setResults] = useState<IndicatorAnalysis[]>([]);
@@ -102,8 +95,20 @@ export default function App() {
 
   const [pendingEvidence, setPendingEvidence] = useState(() => loadPendingEvidence());
 
+  useEffect(() => {
+    fetch('/api/me', { credentials: 'include' })
+      .then(async (r) => {
+        if (!r.ok) return null;
+        return r.json();
+      })
+      .then((data) => {
+        if (data?.ok && typeof data.user === 'string') setAuthedUser(data.user);
+      })
+      .finally(() => setAuthChecked(true));
+  }, []);
+
   // Gate the whole app behind a simple login.
-  // Note: this is UI gating only (not a security boundary).
+  if (!authChecked) return null;
   if (!authedUser) {
     return <Login logoSrc={unamisLogo} onAuthed={(u) => setAuthedUser(u)} />;
   }
@@ -723,8 +728,9 @@ export default function App() {
           <div className="p-3 border-t border-slate-100">
             <button
               onClick={() => {
-                logout();
-                setAuthedUser('');
+                fetch('/api/logout', { method: 'POST', credentials: 'include' }).finally(() => {
+                  setAuthedUser('');
+                });
               }}
               className="w-full flex items-center justify-center gap-2 text-slate-400 hover:text-rose-900 hover:bg-rose-50 py-2 rounded-md text-[10px] font-bold uppercase transition-all"
               title="Cerrar sesión"

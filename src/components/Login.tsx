@@ -15,21 +15,6 @@ const ALLOWED_USERS = new Set([
 
 const TEMP_PASSWORD = 'Unamis2026*';
 
-export function isAuthenticated(): boolean {
-  try {
-    const raw = localStorage.getItem('unamis_auth');
-    if (!raw) return false;
-    const parsed = JSON.parse(raw);
-    return Boolean(parsed?.ok && typeof parsed?.user === 'string' && ALLOWED_USERS.has(parsed.user));
-  } catch {
-    return false;
-  }
-}
-
-export function logout() {
-  localStorage.removeItem('unamis_auth');
-}
-
 export default function Login({
   logoSrc,
   onAuthed,
@@ -51,13 +36,28 @@ export default function Login({
       setError('Usuario no habilitado.');
       return;
     }
-    if (pass !== TEMP_PASSWORD) {
-      setError('Contraseña incorrecta.');
-      return;
-    }
-
-    localStorage.setItem('unamis_auth', JSON.stringify({ ok: true, user: normalizedUser, ts: Date.now() }));
-    onAuthed(normalizedUser);
+    // Server validates and sets an HttpOnly session cookie.
+    fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ user: normalizedUser, pass }),
+    })
+      .then(async (r) => {
+        if (!r.ok) {
+          if (r.status === 401) throw new Error('Contraseña incorrecta.');
+          if (r.status === 403) throw new Error('Usuario no habilitado.');
+          throw new Error('No se pudo iniciar sesión.');
+        }
+        return r.json();
+      })
+      .then((data) => {
+        if (!data?.ok) throw new Error('No se pudo iniciar sesión.');
+        onAuthed(normalizedUser);
+      })
+      .catch((err) => {
+        setError(String(err?.message || err));
+      });
   };
 
   return (
