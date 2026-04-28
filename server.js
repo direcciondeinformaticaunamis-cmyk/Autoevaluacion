@@ -15,12 +15,15 @@ app.get('/health', (_req, res) => res.status(200).send('ok'));
 
 // Serve Vite build output.
 app.use(express.static(DIST_DIR, {
-  maxAge: '1h',
+  // Hashed assets are safe to cache; index.html is handled below.
+  maxAge: '7d',
   index: false,
 }));
 
 // SPA fallback.
 app.get('*', (_req, res) => {
+  // Prevent stale HTML pointing to old hashed bundles.
+  res.setHeader('Cache-Control', 'no-store');
   res.sendFile(path.join(DIST_DIR, 'index.html'));
 });
 
