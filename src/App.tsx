@@ -61,6 +61,7 @@ export default function App() {
   const [analysisHint, setAnalysisHint] = useState(false);
 
   const [localAnalysisFiles, setLocalAnalysisFiles] = useState<File[]>([]);
+  const [localAnalysisDocs, setLocalAnalysisDocs] = useState<{ file: File; text: string }[]>([]);
   const [localAnalysis, setLocalAnalysis] = useState<{ status: 'idle' | 'running' | 'done' | 'error'; progress: number; error?: string }>(
     { status: 'idle', progress: 0 }
   );
@@ -181,22 +182,21 @@ export default function App() {
     return { score, matched };
   };
 
-  const runLocalFileAnalysis = async () => {
-    if (localAnalysisFiles.length === 0) {
-      setAnalysisHint(true);
+  const readLocalAnalysisFiles = async (files: File[]) => {
+    setLocalAnalysisFiles(files);
+    setLocalAnalysisDocs([]);
+    if (files.length === 0) {
+      setLocalAnalysis({ status: 'idle', progress: 0 });
       return;
     }
 
     setLocalAnalysis({ status: 'running', progress: 0 });
-    setIsAnalyzing(true);
-    setAnalysisHint(false);
-
     try {
       const docs: { file: File; text: string }[] = [];
-      const total = localAnalysisFiles.length;
+      const total = files.length;
 
-      for (let idx = 0; idx < localAnalysisFiles.length; idx += 1) {
-        const f = localAnalysisFiles[idx]!;
+      for (let idx = 0; idx < files.length; idx += 1) {
+        const f = files[idx]!;
         const name = f.name;
         const isPdf = /\.pdf$/i.test(name);
         const isImage = /\.(png|jpe?g|webp)$/i.test(name);
@@ -205,24 +205,45 @@ export default function App() {
         if (isPdf) {
           extracted = await extractPdfText(f, 3);
           if ((extracted ?? '').trim().length < 200) {
-            // Best effort OCR for scanned docs.
             try {
               const ocr = await ocrPdfText(f, 2);
               extracted = `${extracted}\n\n${ocr}`.trim();
             } catch {
-              // Ignore OCR errors; keep base extract.
+              // Keep the embedded PDF text if OCR fails.
             }
           }
         } else if (isImage) {
           extracted = await ocrImageText(f);
-        } else {
-          extracted = '';
         }
 
-        const combined = `${name}\n${extracted}`.trim();
-        docs.push({ file: f, text: combined });
+        docs.push({ file: f, text: `${name}\n${extracted}`.trim() });
+        setLocalAnalysisDocs([...docs]);
         setLocalAnalysis({ status: 'running', progress: (idx + 1) / total });
       }
+
+      setLocalAnalysisDocs(docs);
+      setLocalAnalysis({ status: 'done', progress: 1 });
+    } catch (err: any) {
+      setLocalAnalysis({ status: 'error', progress: 0, error: String(err?.message || err) });
+    }
+  };
+
+  const runLocalFileAnalysis = async () => {
+    if (localAnalysisFiles.length === 0) {
+      setAnalysisHint(true);
+      return;
+    }
+
+    if (localAnalysis.status !== 'done' || localAnalysisDocs.length === 0) {
+      setAnalysisHint(true);
+      return;
+    }
+
+    setIsAnalyzing(true);
+    setAnalysisHint(false);
+
+    try {
+      const docs = localAnalysisDocs;
 
       // Assign each doc to best indicator by content.
       const byIndicator = new Map<string, { name: string; year: string; score: number }[]>();
@@ -293,7 +314,6 @@ export default function App() {
       setResults(nextResults);
       setSelectedIndicator(nextResults[0] || null);
       setActiveTab('dashboard');
-      setLocalAnalysis({ status: 'done', progress: 1 });
     } catch (err: any) {
       setLocalAnalysis({ status: 'error', progress: 0, error: String(err?.message || err) });
     } finally {
@@ -829,8 +849,12 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
 
                           <div className="mt-2 text-[11px] text-slate-700 bg-slate-50 border border-slate-100 rounded-xl px-3 py-2">
                             {localAnalysisFiles.length > 0
-                              ? `${localAnalysisFiles.length} archivo(s) listo(s). Al ejecutar análisis voy a leer PDF/imagen, aplicar OCR si hace falta y generar Panel/Matriz.`
-                              : 'Elegí PDF o imágenes aquí. Al presionar Ejecutar Análisis voy a leer el contenido y asignar indicadores automáticamente.'}
+                              ? localAnalysis.status === 'done'
+                                ? `${localAnalysisFiles.length} archivo(s) leído(s). Ya podés ejecutar el análisis.`
+                                : localAnalysis.status === 'running'
+                                  ? 'Estoy leyendo el archivo y aplicando OCR si hace falta. Esperá el OK para ejecutar análisis.'
+                                  : 'Archivo seleccionado. Voy a leerlo antes de habilitar el análisis.'
+                              : 'Elegí PDF o imágenes aquí. Voy a leer el contenido antes de habilitar Ejecutar Análisis.'}
                           </div>
 
                           <div className="mt-3 flex items-center gap-3">
@@ -839,8 +863,7 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                               multiple
                               onChange={(e) => {
                                 const files = Array.from(e.target.files ?? []);
-                                setLocalAnalysisFiles(files);
-                                setLocalAnalysis({ status: 'idle', progress: 0 });
+                                void readLocalAnalysisFiles(files);
                               }}
                               className="block w-full text-xs text-slate-600 file:mr-3 file:rounded-lg file:border file:border-slate-200 file:bg-slate-50 file:px-3 file:py-1.5 file:text-[10px] file:font-black file:uppercase file:tracking-widest file:text-slate-700 hover:file:bg-slate-100"
                               accept=".pdf,.png,.jpg,.jpeg,.webp"
@@ -849,6 +872,17 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                           {localAnalysis.status === 'error' && (
                             <div className="mt-2 text-[11px] text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
                               Fallo el analisis local: {localAnalysis.error}
+                            </div>
+                          )}
+                          {localAnalysisDocs.length > 0 && (
+                            <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
+                              <div className="mb-2 flex items-center justify-between gap-3">
+                                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Texto rescatado</div>
+                                <div className="text-[10px] font-black text-green-700 uppercase tracking-widest">Listo para analizar</div>
+                              </div>
+                              <div className="max-h-28 overflow-y-auto whitespace-pre-wrap text-[11px] leading-relaxed text-slate-700">
+                                {localAnalysisDocs.map((d) => d.text).join('\n\n---\n\n').slice(0, 1800)}
+                              </div>
                             </div>
                           )}
                         </div>
@@ -874,7 +908,7 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                         }
                         runLocalFileAnalysis();
                       }}
-                      disabled={isAnalyzing || (!inputText.trim() && localAnalysisFiles.length === 0)}
+                      disabled={isAnalyzing || (!inputText.trim() && (localAnalysisFiles.length === 0 || localAnalysis.status !== 'done'))}
                       className="bg-slate-900 hover:bg-black text-white px-8 py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest shadow-lg shadow-slate-200 disabled:opacity-50 flex items-center gap-2 transition-all active:scale-95"
                     >
                       {isAnalyzing ? (
