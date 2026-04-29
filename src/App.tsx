@@ -71,6 +71,11 @@ export default function App() {
   const [filterType, setFilterType] = useState<string>('all');
   const [filterYear, setFilterYear] = useState<string>('all');
   const [filterFocus, setFilterFocus] = useState<string>('all');
+  const [catalogSearchTerm, setCatalogSearchTerm] = useState('');
+  const [catalogDimensionFilter, setCatalogDimensionFilter] = useState('all');
+  const [catalogCriterionFilter, setCatalogCriterionFilter] = useState('all');
+  const [openCatalogCriteria, setOpenCatalogCriteria] = useState<Set<string>>(() => new Set(['1.1']));
+  const [expandedCatalogIndicators, setExpandedCatalogIndicators] = useState<Set<string>>(() => new Set());
 
   // Simulated Upload State
   const [isUploading, setIsUploading] = useState(false);
@@ -547,6 +552,10 @@ export default function App() {
   };
 
   const resultsById = new Map(results.map(r => [r.indicator.toLowerCase(), r] as const));
+  const catalogCriterionOptions = OFFICIAL_MATRIX.flatMap((dim) =>
+    dim.criteria.map((crit) => ({ id: crit.id, name: crit.name, dimensionId: dim.id }))
+  );
+  const normalizedCatalogSearch = catalogSearchTerm.trim().toLowerCase();
 
   return (
     <div className="flex flex-col h-screen w-full bg-[radial-gradient(circle_at_top_left,rgba(244,63,94,0.08),transparent_34%),linear-gradient(135deg,#fff7f8_0%,#f8fafc_42%,#eef2f7_100%)] text-slate-900 font-sans select-none overflow-hidden">
@@ -1279,99 +1288,254 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                 key="catalog"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                className="flex-1 overflow-y-auto pb-8 space-y-6"
+                className="flex-1 overflow-y-auto pb-10 space-y-6 pr-1"
               >
-                <div className="flex items-center justify-between">
-                  <h2 className="text-2xl font-black text-slate-900 tracking-tight">Catálogo de Anexos Drive</h2>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total anexos: {catalog.items.length}</p>
+                <div className="sticky top-0 z-10 rounded-3xl border border-white bg-white/85 p-5 shadow-[0_18px_60px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 backdrop-blur-xl">
+                  <div className="flex items-start justify-between gap-4 max-lg:flex-col">
+                    <div>
+                      <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-rose-100 bg-rose-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.24em] text-rose-800">
+                        <BookOpen className="h-3 w-3" /> Catálogo institucional
+                      </div>
+                      <h2 className="text-3xl font-black tracking-tight text-slate-950 max-md:text-2xl">Catálogo de Anexos Drive</h2>
+                      <p className="mt-2 text-sm font-semibold text-slate-500">Explorá evidencias por dimensión, criterio e indicador con acceso directo a Drive.</p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-right shadow-sm">
+                      <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total anexos</div>
+                      <div className="text-2xl font-black text-rose-900">{catalog.items.length}</div>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 grid grid-cols-1 gap-3 lg:grid-cols-[1fr_180px_260px]">
+                    <div className="relative">
+                      <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                      <input
+                        value={catalogSearchTerm}
+                        onChange={(e) => setCatalogSearchTerm(e.target.value)}
+                        placeholder="Buscar por indicador, criterio o nombre de anexo..."
+                        className="w-full rounded-2xl border border-slate-200 bg-white px-11 py-3 text-sm font-semibold text-slate-700 shadow-sm outline-none transition-all placeholder:text-slate-400 focus:border-rose-200 focus:ring-2 focus:ring-rose-200"
+                      />
+                    </div>
+                    <select
+                      value={catalogDimensionFilter}
+                      onChange={(e) => setCatalogDimensionFilter(e.target.value)}
+                      className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-[11px] font-black uppercase tracking-widest text-slate-600 shadow-sm outline-none focus:border-rose-200 focus:ring-2 focus:ring-rose-200"
+                    >
+                      <option value="all">Todas las dimensiones</option>
+                      {OFFICIAL_MATRIX.map((dim) => (
+                        <option key={dim.id} value={dim.id}>Dimensión {dim.id}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={catalogCriterionFilter}
+                      onChange={(e) => setCatalogCriterionFilter(e.target.value)}
+                      className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-[11px] font-black uppercase tracking-widest text-slate-600 shadow-sm outline-none focus:border-rose-200 focus:ring-2 focus:ring-rose-200"
+                    >
+                      <option value="all">Todos los criterios</option>
+                      {catalogCriterionOptions
+                        .filter((crit) => catalogDimensionFilter === 'all' || crit.dimensionId === catalogDimensionFilter)
+                        .map((crit) => (
+                          <option key={crit.id} value={crit.id}>Criterio {crit.id}</option>
+                        ))}
+                    </select>
+                  </div>
                 </div>
 
                 {['1', '2', '3'].map((dimId) => {
                   const dim = OFFICIAL_MATRIX.find((d) => d.id === dimId);
                   const dimItems = catalog.byDimension.get(dimId) ?? [];
+                  if (!dim || (catalogDimensionFilter !== 'all' && catalogDimensionFilter !== dimId)) return null;
+
+                  const visibleCriteria = dim.criteria
+                    .map((crit) => {
+                      const visibleIndicators = crit.indicators
+                        .map((ind) => {
+                          const items = catalog.byIndicator.get(ind.id.toLowerCase()) ?? [];
+                          const searchMatchesIndicator = !normalizedCatalogSearch
+                            || ind.id.toLowerCase().includes(normalizedCatalogSearch)
+                            || ind.description.toLowerCase().includes(normalizedCatalogSearch)
+                            || crit.name.toLowerCase().includes(normalizedCatalogSearch)
+                            || items.some((it) => it.name.toLowerCase().includes(normalizedCatalogSearch));
+                          return searchMatchesIndicator ? { ...ind, items } : null;
+                        })
+                        .filter(Boolean) as Array<(typeof crit.indicators)[number] & { items: CatalogItem[] }>;
+
+                      if (catalogCriterionFilter !== 'all' && catalogCriterionFilter !== crit.id) return null;
+                      if (visibleIndicators.length === 0) return null;
+                      return { ...crit, visibleIndicators };
+                    })
+                    .filter(Boolean) as Array<(typeof dim.criteria)[number] & { visibleIndicators: Array<(typeof dim.criteria)[number]['indicators'][number] & { items: CatalogItem[] }> }>;
+
+                  if (visibleCriteria.length === 0) return null;
 
                   return (
-                    <section key={dimId} className="bg-white/90 border border-white rounded-3xl shadow-[0_18px_60px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 overflow-hidden">
-                      <div className="p-5 bg-gradient-to-r from-white to-rose-50/30 border-b border-slate-200">
-                        <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Dimensión {dimId}</div>
-                        <div className="text-sm font-black text-slate-800">{dim?.name ?? 'Sin nombre'}</div>
+                    <section key={dimId} className="overflow-hidden rounded-3xl border border-white bg-white/90 shadow-[0_18px_60px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70">
+                      <div className="relative overflow-hidden border-b border-slate-200 bg-gradient-to-r from-rose-950 via-rose-900 to-slate-950 p-6 text-white">
+                        <div aria-hidden className="absolute -right-10 -top-10 h-36 w-36 rounded-full bg-white/10 blur-2xl" />
+                        <div className="relative flex items-center justify-between gap-4 max-md:flex-col max-md:items-start">
+                          <div>
+                            <div className="text-[10px] font-black uppercase tracking-[0.28em] text-rose-200">Dimensión {dimId}</div>
+                            <div className="mt-1 text-xl font-black tracking-tight">{dim.name}</div>
+                          </div>
+                          <div className="rounded-2xl border border-white/15 bg-white/10 px-4 py-2 text-right backdrop-blur">
+                            <div className="text-[10px] font-black uppercase tracking-widest text-rose-100">Anexos</div>
+                            <div className="text-lg font-black">{dimItems.length}</div>
+                          </div>
+                        </div>
                       </div>
 
-                      <div className="p-4">
-                        {dim ? (
-                          <div className="space-y-4">
-                            {dim.criteria.map((crit) => (
-                              <div key={crit.id} className="border border-slate-100 rounded-lg overflow-hidden">
-                                <div className="px-3 py-2 bg-white border-b border-slate-100">
-                                  <div className="text-xs font-black text-slate-700 uppercase tracking-tight">Criterio {crit.id}: {crit.name}</div>
+                      <div className="space-y-4 p-4">
+                        {visibleCriteria.map((crit) => {
+                          const isOpen = openCatalogCriteria.has(crit.id) || normalizedCatalogSearch.length > 0 || catalogCriterionFilter !== 'all';
+                          const criterionDocs = crit.visibleIndicators.reduce((sum, ind) => sum + ind.items.length, 0);
+                          return (
+                            <div key={crit.id} className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setOpenCatalogCriteria((prev) => {
+                                    const next = new Set(prev);
+                                    if (next.has(crit.id)) next.delete(crit.id);
+                                    else next.add(crit.id);
+                                    return next;
+                                  });
+                                }}
+                                className="flex w-full items-center justify-between gap-4 bg-gradient-to-r from-white to-slate-50 px-5 py-4 text-left transition-colors hover:from-rose-50/60 hover:to-white"
+                              >
+                                <div className="min-w-0">
+                                  <div className="text-[10px] font-black uppercase tracking-[0.22em] text-rose-800">Criterio {crit.id}</div>
+                                  <div className="mt-1 truncate text-sm font-black text-slate-900">{crit.name}</div>
                                 </div>
-                                <div className="divide-y divide-slate-100">
-                                  {crit.indicators.map((ind) => {
-                                    const items = catalog.byIndicator.get(ind.id.toLowerCase()) ?? [];
-                                    return (
-                                      <div key={ind.id} className="px-3 py-3">
-                                        <div className="flex items-start justify-between gap-3">
-                                          <div>
-                                            <div className="font-mono font-extrabold text-rose-900 text-[15px] leading-none">{ind.id}</div>
-                                            <div className="text-[12px] text-slate-700 font-medium leading-snug mt-1">{ind.description}</div>
-                                          </div>
-                                          <div className="shrink-0 text-[11px] font-black uppercase tracking-widest text-slate-400">{items.length} docs</div>
-                                        </div>
+                                <div className="flex shrink-0 items-center gap-3">
+                                  <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-black uppercase tracking-widest text-slate-500">{criterionDocs} docs</span>
+                                  <motion.span animate={{ rotate: isOpen ? 90 : 0 }} transition={{ duration: 0.18 }}>
+                                    <ChevronRight className="h-4 w-4 text-slate-400" />
+                                  </motion.span>
+                                </div>
+                              </button>
 
-                                        {items.length > 0 ? (
-                                          <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2">
-                                            {items.map((it) => (
-                                              it.pending ? (
-                                                <div
-                                                  key={it.name}
-                                                  className="flex items-center justify-between gap-3 rounded-md border border-rose-200 bg-rose-50/30 px-3 py-2"
-                                                  title="Pendiente de subir a Drive"
-                                                >
-                                                  <div className="min-w-0">
-                                                    <div className="truncate font-mono text-[11px] font-bold text-slate-800">{it.name}</div>
-                                                    <div className="text-[10px] text-slate-500 font-semibold">{it.year ?? 's/a'} · Pendiente</div>
-                                                  </div>
-                                                  <span className="text-[10px] font-black uppercase tracking-widest text-rose-800 border border-rose-200 bg-white px-2 py-0.5 rounded">Pendiente</span>
+                              <AnimatePresence initial={false}>
+                                {isOpen && (
+                                  <motion.div
+                                    initial={{ height: 0, opacity: 0 }}
+                                    animate={{ height: 'auto', opacity: 1 }}
+                                    exit={{ height: 0, opacity: 0 }}
+                                    transition={{ duration: 0.22, ease: 'easeOut' }}
+                                    className="overflow-hidden"
+                                  >
+                                    <div className="space-y-4 border-t border-slate-100 bg-slate-50/50 p-4">
+                                      {crit.visibleIndicators.map((ind) => {
+                                        const isExpanded = expandedCatalogIndicators.has(ind.id);
+                                        const visibleItems = isExpanded ? ind.items : ind.items.slice(0, 8);
+                                        return (
+                                          <div key={ind.id} className="rounded-3xl border border-white bg-white p-4 shadow-sm ring-1 ring-slate-200/70">
+                                            <div className="flex items-start justify-between gap-4 max-md:flex-col">
+                                              <div className="min-w-0">
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                  <span className="rounded-2xl bg-rose-950 px-3 py-1.5 font-mono text-sm font-black text-white shadow-lg shadow-rose-900/20">{ind.id}</span>
+                                                  <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-slate-500">{ind.items.length} docs</span>
+                                                  {ind.items.some((it) => it.pending) && (
+                                                    <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-amber-700">Pendientes</span>
+                                                  )}
                                                 </div>
-                                              ) : (
-                                                <a
-                                                  key={it.name}
-                                                  href={it.link}
-                                                  target="_blank"
-                                                  rel="noreferrer"
-                                                  className="group flex items-center justify-between gap-3 rounded-md border border-slate-200 bg-white px-3 py-2 hover:border-rose-300 hover:bg-rose-50/30 transition-colors"
-                                                  title="Abrir en Drive"
-                                                >
-                                                  <div className="min-w-0">
-                                                    <div className="truncate font-mono text-[11px] font-bold text-slate-800 group-hover:text-rose-950">{it.name}</div>
-                                                    <div className="text-[10px] text-slate-400 font-semibold">{it.year ?? 's/a'}</div>
-                                                  </div>
-                                                  <ExternalLink className="w-4 h-4 text-rose-800 shrink-0" />
-                                                </a>
-                                              )
-                                            ))}
-                                          </div>
-                                        ) : (
-                                          <div className="mt-3 text-[11px] text-slate-400 italic">Sin anexos cargados en el catálogo para este indicador.</div>
-                                        )}
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="text-sm text-slate-500">No se encontró la dimensión en la matriz.</div>
-                        )}
+                                                <p className="mt-3 text-sm font-semibold leading-relaxed text-slate-700">{ind.description}</p>
+                                              </div>
+                                            </div>
 
-                        <div className="mt-6 pt-4 border-t border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                          Anexos en esta dimensión: {dimItems.length}
-                        </div>
+                                            {ind.items.length > 0 ? (
+                                              <div className="mt-4 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
+                                                {visibleItems.map((it) => {
+                                                  const fileName = it.name.replace(/_/g, ' ');
+                                                  const content = (
+                                                    <>
+                                                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-rose-50 text-rose-800 ring-1 ring-rose-100 transition-colors group-hover:bg-rose-900 group-hover:text-white">
+                                                        <FileText className="h-4 w-4" />
+                                                      </div>
+                                                      <div className="min-w-0 flex-1">
+                                                        <div className="truncate text-[12px] font-black text-slate-900 group-hover:text-rose-950" title={it.name}>{fileName}</div>
+                                                        <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                                                          <span>{it.year ?? 's/a'}</span>
+                                                          {it.pending && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-amber-700 ring-1 ring-amber-200">Pendiente</span>}
+                                                        </div>
+                                                      </div>
+                                                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-rose-800 transition-colors group-hover:border-rose-200 group-hover:bg-rose-50" title={it.pending ? 'Pendiente de subir a Drive' : 'Abrir en Drive'}>
+                                                        {it.pending ? <Clock className="h-3.5 w-3.5" /> : <ExternalLink className="h-3.5 w-3.5" />}
+                                                      </div>
+                                                    </>
+                                                  );
+
+                                                  return it.pending ? (
+                                                    <div key={it.name} className="group flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50/40 px-3 py-3 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
+                                                      {content}
+                                                    </div>
+                                                  ) : (
+                                                    <a
+                                                      key={it.name}
+                                                      href={it.link}
+                                                      target="_blank"
+                                                      rel="noreferrer"
+                                                      className="group flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-3 shadow-sm transition-all hover:-translate-y-0.5 hover:border-rose-200 hover:bg-rose-50/30 hover:shadow-md"
+                                                    >
+                                                      {content}
+                                                    </a>
+                                                  );
+                                                })}
+                                              </div>
+                                            ) : (
+                                              <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-center text-[11px] font-semibold text-slate-400">Sin anexos cargados en el catálogo para este indicador.</div>
+                                            )}
+
+                                            {ind.items.length > 8 && (
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  setExpandedCatalogIndicators((prev) => {
+                                                    const next = new Set(prev);
+                                                    if (next.has(ind.id)) next.delete(ind.id);
+                                                    else next.add(ind.id);
+                                                    return next;
+                                                  });
+                                                }}
+                                                className="mt-3 rounded-2xl border border-rose-100 bg-rose-50 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-rose-800 transition-colors hover:bg-rose-100"
+                                              >
+                                                {isExpanded ? 'Ver menos' : `Ver ${ind.items.length - 8} más`}
+                                              </button>
+                                            )}
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
+                            </div>
+                          );
+                        })}
                       </div>
                     </section>
                   );
                 })}
+
+                {['1', '2', '3'].every((dimId) => {
+                  const dim = OFFICIAL_MATRIX.find((d) => d.id === dimId);
+                  if (!dim || (catalogDimensionFilter !== 'all' && catalogDimensionFilter !== dimId)) return true;
+                  return dim.criteria.every((crit) => {
+                    if (catalogCriterionFilter !== 'all' && catalogCriterionFilter !== crit.id) return true;
+                    return crit.indicators.every((ind) => {
+                      const items = catalog.byIndicator.get(ind.id.toLowerCase()) ?? [];
+                      return normalizedCatalogSearch
+                        && !ind.id.toLowerCase().includes(normalizedCatalogSearch)
+                        && !ind.description.toLowerCase().includes(normalizedCatalogSearch)
+                        && !crit.name.toLowerCase().includes(normalizedCatalogSearch)
+                        && !items.some((it) => it.name.toLowerCase().includes(normalizedCatalogSearch));
+                    });
+                  });
+                }) && (
+                  <div className="rounded-3xl border border-dashed border-slate-200 bg-white/80 p-12 text-center shadow-sm">
+                    <Search className="mx-auto h-10 w-10 text-slate-300" />
+                    <div className="mt-3 text-sm font-black uppercase tracking-widest text-slate-500">Sin resultados</div>
+                    <p className="mt-2 text-sm font-semibold text-slate-400">Probá limpiar el buscador o cambiar los filtros del catálogo.</p>
+                  </div>
+                )}
               </motion.div>
             )}
 
