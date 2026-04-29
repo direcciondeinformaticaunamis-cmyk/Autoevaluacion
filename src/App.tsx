@@ -543,6 +543,10 @@ export default function App() {
     setSelectedIndicator(null);
     setActiveTab('input');
     setAnalysisHint(false);
+    setLocalAnalysisFiles([]);
+    setLocalAnalysisDocs([]);
+    setLocalAnalysis({ status: 'idle', progress: 0 });
+    if (localAnalysisInputRef.current) localAnalysisInputRef.current.value = '';
   };
 
   const calculateProgress = () => {
