@@ -1342,8 +1342,13 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
 
                 {['1', '2', '3'].map((dimId) => {
                   const dim = OFFICIAL_MATRIX.find((d) => d.id === dimId);
-                  const dimItems = catalog.byDimension.get(dimId) ?? [];
                   if (!dim || (catalogDimensionFilter !== 'all' && catalogDimensionFilter !== dimId)) return null;
+                  const dimensionDocCount = dim.criteria.reduce(
+                    (sum, crit) => sum + crit.indicators.reduce((indicatorSum, ind) => (
+                      indicatorSum + (catalog.byIndicator.get(ind.id.toLowerCase()) ?? []).length
+                    ), 0),
+                    0
+                  );
 
                   const visibleCriteria = dim.criteria
                     .map((crit) => {
@@ -1378,7 +1383,7 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                           </div>
                           <div className="rounded-2xl border border-white/15 bg-white/10 px-4 py-2 text-right backdrop-blur">
                             <div className="text-[10px] font-black uppercase tracking-widest text-rose-100">Anexos</div>
-                            <div className="text-lg font-black">{dimItems.length}</div>
+                            <div className="text-lg font-black">{dimensionDocCount}</div>
                           </div>
                         </div>
                       </div>
