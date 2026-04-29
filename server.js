@@ -19,6 +19,7 @@ const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const PENDING_EVIDENCE_FILE = path.join(DATA_DIR, 'pending-evidence.json');
 const SESSIONS_FILE = path.join(DATA_DIR, 'sessions.json');
 const HISTORY_FILE = path.join(DATA_DIR, 'history.json');
+const CATALOG_LINKS_FILE = path.join(__dirname, 'src', 'constants', 'catalogLinks.ts');
 
 const ALLOWED_USERS = new Set([
   'direccion',
@@ -131,6 +132,20 @@ function readPendingEvidence() {
   }
 }
 
+function readBaseCatalogNames() {
+  try {
+    const raw = fs.readFileSync(CATALOG_LINKS_FILE, 'utf8');
+    const names = [];
+    const re = /["']([^"']+)["']\s*:/g;
+    let match;
+    while ((match = re.exec(raw))) names.push(match[1].replace(/\s+/g, '_'));
+    return names;
+  } catch (err) {
+    console.error('Could not read base catalog links:', err);
+    return [];
+  }
+}
+
 function normalizePendingEvidenceItem(item) {
   if (!item || typeof item !== 'object') return null;
   const generatedName = String(item.generatedName || '').trim();
@@ -216,6 +231,7 @@ function safeFileBase(name) {
 
 function buildGeneratedName({ originalName, indicatorId, dimensionId, knownNames = [] }) {
   const existingNames = [
+    ...readBaseCatalogNames(),
     ...knownNames.map(String),
     ...readPendingEvidence().map((item) => item.generatedName),
   ];
