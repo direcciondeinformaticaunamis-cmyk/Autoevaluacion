@@ -1980,15 +1980,35 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                       )}
 
                       <div className="mt-3">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block px-1 mb-2">Hipervínculo de Drive (opcional)</label>
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block px-1 mb-2">Link de Drive si ya lo subiste (opcional)</label>
                         <textarea
                           value={uploadDriveLinks}
                           onChange={(e) => setUploadDriveLinks(e.target.value)}
-                          placeholder="Pegá aquí el link de Drive después de subir manualmente. Si son varios archivos, un link por línea."
+                          placeholder="Si ya subiste el archivo codificado a Drive, pegá aquí el link. Si son varios archivos, un link por línea."
                           className="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs font-medium outline-none ring-offset-2 focus:ring-2 focus:ring-rose-700 transition-all shadow-sm min-h-20"
                         />
-                        <div className="mt-2 text-[10px] font-semibold text-slate-400 leading-relaxed">
-                          Si lo dejás vacío, se agrega como pendiente. Después podés cargar el vínculo cuando lo tengas.
+                        <div className="mt-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-[10px] font-semibold text-slate-500 leading-relaxed">
+                          {uploadDriveLinks.trim()
+                            ? 'Al presionar el botón, se descarga el archivo codificado y también se agrega al catálogo con este link.'
+                            : 'Al presionar el botón, se descarga el archivo codificado y se agrega al catálogo como PENDIENTE. Luego podés pegar el link desde Pendientes.'}
+                        </div>
+                      </div>
+
+                      <div className={cn(
+                        'mt-3 rounded-2xl border px-4 py-3',
+                        uploadDriveLinks.trim() ? 'border-green-100 bg-green-50/80' : 'border-amber-100 bg-amber-50/80'
+                      )}>
+                        <div className={cn(
+                          'text-[10px] font-black uppercase tracking-widest',
+                          uploadDriveLinks.trim() ? 'text-green-700' : 'text-amber-700'
+                        )}>Resultado al registrar</div>
+                        <div className={cn(
+                          'mt-1 text-xs font-bold leading-relaxed',
+                          uploadDriveLinks.trim() ? 'text-green-800' : 'text-amber-800'
+                        )}>
+                          {uploadDriveLinks.trim()
+                            ? 'Se verá en el Catálogo como anexo cargado con botón para abrir Drive.'
+                            : 'Se verá en el Catálogo como pendiente hasta que agregues el link.'}
                         </div>
                       </div>
                     </div>
@@ -2044,7 +2064,8 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                       <h4 className="text-[10px] font-black text-rose-300 uppercase tracking-[0.2em] mb-4">Información de Sistema</h4>
                       <div className="space-y-3 text-[11px] font-medium leading-relaxed opacity-90">
                         <p>• La app calcula el siguiente número de anexo del criterio seleccionado.</p>
-                        <p>• Se descargará una copia renombrada; luego la subís manualmente a Drive y pegás el link.</p>
+                        <p>• El botón descarga el archivo renombrado y registra el anexo en el catálogo.</p>
+                        <p>• Si pegaste link, entra con vínculo. Si no, queda pendiente para cargarlo después.</p>
                       </div>
                       <button 
                         onClick={executeUpload}
@@ -2054,7 +2075,7 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                         {isUploading ? (
                           <> <Loader2 className="w-4 h-4 animate-spin" /> Codificando... </>
                         ) : (
-                          <> <Download className="w-4 h-4" /> Descargar Codificado y Registrar </>
+                          <> <Download className="w-4 h-4" /> {uploadDriveLinks.trim() ? 'Descargar y Agregar al Catálogo' : 'Descargar y Dejar Pendiente'} </>
                         )}
                       </button>
                     </div>
