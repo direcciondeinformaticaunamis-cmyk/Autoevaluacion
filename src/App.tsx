@@ -548,32 +548,32 @@ export default function App() {
   const resultsById = new Map(results.map(r => [r.indicator.toLowerCase(), r] as const));
 
   return (
-    <div className="flex flex-col h-screen w-full bg-slate-50 text-slate-900 font-sans select-none overflow-hidden">
+    <div className="flex flex-col h-screen w-full bg-[radial-gradient(circle_at_top_left,rgba(244,63,94,0.08),transparent_34%),linear-gradient(135deg,#fff7f8_0%,#f8fafc_42%,#eef2f7_100%)] text-slate-900 font-sans select-none overflow-hidden">
       {/* Header Navigation */}
-      <header className="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-6 shrink-0 z-20">
+      <header className="h-20 bg-white/85 backdrop-blur-xl border-b border-white/70 shadow-[0_10px_40px_rgba(15,23,42,0.06)] flex items-center justify-between gap-4 px-7 shrink-0 z-20 max-md:h-auto max-md:flex-col max-md:items-start max-md:px-4 max-md:py-4">
         <div className="flex items-center gap-4">
-          <div className="bg-white border border-slate-200 rounded p-1">
+          <div className="bg-white border border-rose-100 rounded-2xl p-2 shadow-sm">
             <img
               src={unamisLogo}
               alt="UNAMIS"
-              className="w-8 h-8 object-contain"
+              className="w-10 h-10 object-contain"
             />
           </div>
           <div>
-            <h1 className="text-sm font-bold tracking-tight text-slate-900 uppercase">UNAMIS</h1>
-            <p className="text-[10px] text-slate-500 uppercase tracking-widest leading-none font-semibold">Universidad Nacional de Misiones</p>
+            <h1 className="text-base font-black tracking-tight text-slate-950 uppercase">UNAMIS Autoevaluación</h1>
+            <p className="text-[10px] text-slate-500 uppercase tracking-[0.24em] leading-none font-bold">Universidad Nacional de Misiones</p>
           </div>
         </div>
         
         {results.length > 0 && (
-          <div className="flex items-center gap-8">
+          <div className="flex items-center gap-8 rounded-2xl border border-slate-200/80 bg-white/80 px-4 py-3 shadow-sm max-md:w-full max-md:justify-between max-sm:flex-col max-sm:items-stretch max-sm:gap-3">
             <div className="flex flex-col items-end">
-              <span className="text-[10px] font-bold text-slate-400 uppercase">AVANCE DE ACREDITACIÓN</span>
-              <div className="w-48 h-2 bg-slate-100 rounded-full mt-1 overflow-hidden border border-slate-200">
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">AVANCE DE ACREDITACIÓN</span>
+              <div className="w-48 h-2.5 bg-slate-100 rounded-full mt-1.5 overflow-hidden border border-slate-200 shadow-inner">
                 <motion.div 
                   initial={{ width: 0 }}
                   animate={{ width: `${calculateProgress()}%` }}
-                  className="h-full bg-rose-700"
+                  className="h-full bg-gradient-to-r from-rose-800 to-rose-500"
                 ></motion.div>
               </div>
             </div>
@@ -587,19 +587,20 @@ export default function App() {
         )}
       </header>
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden max-lg:flex-col">
         {/* Sidebar: Indicators List */}
-        <aside className="w-72 bg-white border-r border-slate-200 flex flex-col shrink-0">
-          <div className="p-3 bg-slate-50 border-b border-slate-200 space-y-3">
-            <div className="grid grid-cols-3 gap-1">
+        <aside className="w-80 bg-white/80 backdrop-blur-xl border-r border-white/80 shadow-[18px_0_50px_rgba(15,23,42,0.06)] flex flex-col shrink-0 max-lg:w-full max-lg:max-h-80 max-lg:border-r-0 max-lg:border-b max-lg:shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
+          <div className="p-4 bg-white/60 border-b border-slate-200/70 space-y-4">
+            <div className="grid grid-cols-2 gap-2 max-lg:grid-cols-5 max-sm:grid-cols-2">
               <button 
                 onClick={() => setActiveTab('input')}
                 className={cn(
-                  "flex-1 px-3 py-1.5 rounded-md text-[10px] font-bold uppercase transition-all border",
-                  activeTab === 'input' ? "bg-rose-800 text-white border-rose-900 shadow-sm" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                  "flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border",
+                  activeTab === 'input' ? "bg-rose-900 text-white border-rose-950 shadow-lg shadow-rose-900/20" : "bg-white/90 text-slate-600 border-slate-200 hover:bg-rose-50 hover:text-rose-900 hover:border-rose-200"
                 )}
                 title="Cargar evidencias y ejecutar análisis"
               >
+                <FileText className="w-3.5 h-3.5" />
                 Carga
               </button>
               <button 
@@ -612,15 +613,16 @@ export default function App() {
                   setActiveTab('dashboard');
                 }}
                 className={cn(
-                  "flex-1 px-3 py-1.5 rounded-md text-[10px] font-bold uppercase transition-all border",
+                  "flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border",
                   activeTab === 'dashboard'
-                    ? "bg-rose-800 text-white border-rose-900 shadow-sm"
+                    ? "bg-rose-900 text-white border-rose-950 shadow-lg shadow-rose-900/20"
                     : results.length === 0
-                      ? "bg-white text-slate-600 border-slate-200 opacity-50"
-                      : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                      ? "bg-white/70 text-slate-400 border-slate-200 opacity-60"
+                      : "bg-white/90 text-slate-600 border-slate-200 hover:bg-rose-50 hover:text-rose-900 hover:border-rose-200"
                 )}
                 title={results.length === 0 ? 'Pegá la lista de archivos y ejecutá análisis para habilitar.' : 'Abrir panel'}
               >
+                <BarChart3 className="w-3.5 h-3.5" />
                 Panel
               </button>
               <button 
@@ -633,15 +635,16 @@ export default function App() {
                   setActiveTab('search');
                 }}
                 className={cn(
-                  "flex-1 px-3 py-1.5 rounded-md text-[10px] font-bold uppercase transition-all border",
+                  "flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border",
                   activeTab === 'search'
-                    ? "bg-rose-800 text-white border-rose-900 shadow-sm"
+                    ? "bg-rose-900 text-white border-rose-950 shadow-lg shadow-rose-900/20"
                     : results.length === 0
-                      ? "bg-white text-slate-600 border-slate-200 opacity-50"
-                      : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                      ? "bg-white/70 text-slate-400 border-slate-200 opacity-60"
+                      : "bg-white/90 text-slate-600 border-slate-200 hover:bg-rose-50 hover:text-rose-900 hover:border-rose-200"
                 )}
                 title={results.length === 0 ? 'Pegá la lista de archivos y ejecutá análisis para habilitar.' : 'Abrir buscador'}
               >
+                <Search className="w-3.5 h-3.5" />
                 Buscador
               </button>
               <button 
@@ -654,43 +657,47 @@ export default function App() {
                   setActiveTab('matrix');
                 }}
                 className={cn(
-                  "flex-1 px-3 py-1.5 rounded-md text-[10px] font-bold uppercase transition-all border",
+                  "flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border",
                   activeTab === 'matrix'
-                    ? "bg-rose-800 text-white border-rose-900 shadow-sm"
+                    ? "bg-rose-900 text-white border-rose-950 shadow-lg shadow-rose-900/20"
                     : results.length === 0
-                      ? "bg-white text-slate-600 border-slate-200 opacity-50"
-                      : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                      ? "bg-white/70 text-slate-400 border-slate-200 opacity-60"
+                      : "bg-white/90 text-slate-600 border-slate-200 hover:bg-rose-50 hover:text-rose-900 hover:border-rose-200"
                 )}
                 title={results.length === 0 ? 'Pegá la lista de archivos y ejecutá análisis para habilitar.' : 'Abrir matriz'}
               >
+                <ListTodo className="w-3.5 h-3.5" />
                 Matriz
               </button>
               <button 
                 onClick={() => setActiveTab('catalog')}
                 className={cn(
-                  "flex-1 px-3 py-1.5 rounded-md text-[10px] font-bold uppercase transition-all border",
-                  activeTab === 'catalog' ? "bg-rose-800 text-white border-rose-900 shadow-sm" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                  "col-span-2 flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border max-lg:col-span-1 max-sm:col-span-2",
+                  activeTab === 'catalog' ? "bg-rose-900 text-white border-rose-950 shadow-lg shadow-rose-900/20" : "bg-white/90 text-slate-600 border-slate-200 hover:bg-rose-50 hover:text-rose-900 hover:border-rose-200"
                 )}
               >
+                <BookOpen className="w-3.5 h-3.5" />
                 Catálogo
               </button>
             </div>
-           <div className="relative">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
               <input 
                 type="text" 
                 placeholder="Filtrar por indicador..." 
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full text-xs bg-white border border-slate-200 rounded-md px-2.5 py-2 focus:outline-none focus:ring-1 focus:ring-rose-700 placeholder:text-slate-400" 
+                className="w-full text-xs bg-white/95 border border-slate-200 rounded-xl pl-9 pr-3 py-3 focus:outline-none focus:ring-2 focus:ring-rose-200 focus:border-rose-300 placeholder:text-slate-400 shadow-sm" 
               />
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
+          <div className="flex-1 overflow-y-auto divide-y divide-slate-100/80 px-2 py-2">
             {results.length === 0 ? (
-              <div className="p-8 text-center text-slate-400 flex flex-col items-center gap-2">
-                <Clock className="w-8 h-8 opacity-20" />
-                <p className="text-[10px] font-bold uppercase tracking-wider">Esperando datos...</p>
+              <div className="m-2 rounded-2xl border border-dashed border-slate-200 bg-white/70 p-8 text-center text-slate-400 flex flex-col items-center gap-3">
+                <Clock className="w-9 h-9 opacity-25" />
+                <p className="text-[10px] font-black uppercase tracking-widest">Esperando datos...</p>
+                <p className="text-[11px] font-medium leading-relaxed text-slate-400">La lista de indicadores aparecerá después del análisis.</p>
               </div>
             ) : filteredResults.length > 0 ? (
               filteredResults.map((indicator, idx) => (
@@ -701,10 +708,10 @@ export default function App() {
                     setActiveTab('results');
                   }}
                   className={cn(
-                    "p-3 cursor-pointer border-l-4 transition-all group",
+                    "my-1 rounded-xl p-3 cursor-pointer border-l-4 transition-all group",
                     selectedIndicator?.indicator === indicator.indicator 
-                      ? "bg-rose-50/50 border-rose-800" 
-                      : cn("hover:bg-slate-50", getIndicatorBorder(indicator.state))
+                      ? "bg-rose-50 border-rose-800 shadow-sm" 
+                      : cn("hover:bg-white hover:shadow-sm", getIndicatorBorder(indicator.state))
                   )}
                 >
                   <div className="flex justify-between items-start mb-1">
@@ -734,14 +741,14 @@ export default function App() {
             )}
           </div>
 
-          <div className="p-3 border-t border-slate-100">
+          <div className="p-4 border-t border-slate-100 bg-white/70 space-y-2">
             <button
               onClick={() => {
                 fetch('/api/logout', { method: 'POST', credentials: 'include' }).finally(() => {
                   setAuthedUser('');
                 });
               }}
-              className="w-full flex items-center justify-center gap-2 text-slate-400 hover:text-rose-900 hover:bg-rose-50 py-2 rounded-md text-[10px] font-bold uppercase transition-all"
+              className="w-full flex items-center justify-center gap-2 text-slate-500 hover:text-rose-900 hover:bg-rose-50 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
               title="Cerrar sesión"
             >
               <Settings className="w-3 h-3" />
@@ -750,7 +757,7 @@ export default function App() {
 
             <button 
               onClick={clearSession}
-              className="w-full flex items-center justify-center gap-2 text-slate-400 hover:text-red-500 hover:bg-red-50 py-2 rounded-md text-[10px] font-bold uppercase transition-all"
+              className="w-full flex items-center justify-center gap-2 text-slate-500 hover:text-red-600 hover:bg-red-50 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
             >
               <Trash2 className="w-3 h-3" />
               Reiniciar Sistema
@@ -759,7 +766,7 @@ export default function App() {
         </aside>
 
         {/* Main Content Panel */}
-        <main className="flex-1 p-5 overflow-hidden flex flex-col gap-5 min-h-0">
+        <main className="flex-1 p-6 overflow-hidden flex flex-col gap-5 min-h-0 max-md:p-4">
           <AnimatePresence mode="wait">
             {activeTab === 'input' && (
               <motion.div 
@@ -767,14 +774,18 @@ export default function App() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
-                className="flex-1 flex flex-col max-w-5xl mx-auto w-full"
+                className="flex-1 flex flex-col max-w-6xl mx-auto w-full"
               >
-                <div className="mb-6 flex justify-between items-end">
+                <div className="mb-6 flex justify-between items-end gap-6 rounded-3xl border border-white/80 bg-white/70 px-6 py-5 shadow-[0_18px_60px_rgba(15,23,42,0.08)] backdrop-blur-xl max-md:flex-col max-md:items-start max-md:px-5">
                   <div>
-                    <h2 className="text-xl font-black tracking-tight text-slate-800">CENTRAL DE CARGA DE EVIDENCIAS</h2>
-                    <p className="text-xs text-slate-500 font-medium">Ingrese la nomenclatura estandarizada de los archivos del repositorio institucional.</p>
+                    <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-rose-100 bg-rose-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.24em] text-rose-800">
+                      <Database className="h-3 w-3" /> Flujo principal
+                    </div>
+                    <h2 className="text-3xl font-black tracking-tight text-slate-950 max-md:text-2xl">Central de Carga de Evidencias</h2>
+                    <p className="mt-2 max-w-2xl text-sm text-slate-600 font-medium leading-relaxed">Pegá nomenclaturas del repositorio institucional o seleccioná archivos locales. El asistente lee el contenido antes de habilitar el análisis.</p>
                     {analysisHint && results.length === 0 && (
-                      <div className="mt-3 text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 inline-block">
+                      <div className="mt-4 text-[11px] font-bold text-amber-900 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 inline-flex items-center gap-2 shadow-sm">
+                        <AlertTriangle className="h-3.5 w-3.5" />
                         Para habilitar Panel, Buscador y Matriz: pegá la lista o subí archivos locales y presioná "Ejecutar Análisis".
                       </div>
                     )}
@@ -804,38 +815,41 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                   )}
                 </div>
 
-                <div className="bg-white border border-slate-200 rounded-xl shadow-sm flex-1 flex flex-col overflow-hidden">
-                  <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                <div className="bg-white/95 border border-white rounded-3xl shadow-[0_24px_80px_rgba(15,23,42,0.10)] flex-1 flex flex-col overflow-hidden ring-1 ring-slate-200/70">
+                  <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-white to-rose-50/40">
+                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
                       <FileText className="w-3.5 h-3.5" /> Entrada de Registro de Auditoría
                     </span>
-                    <span className="text-[9px] font-bold text-rose-800 bg-white border border-rose-100 px-2 py-0.5 rounded shadow-sm">ESTRICTO: NOMENCLATURA DRIVE</span>
+                    <span className="text-[9px] font-black text-rose-900 bg-white border border-rose-100 px-3 py-1 rounded-full shadow-sm">ESTRICTO: NOMENCLATURA DRIVE</span>
                   </div>
                   <textarea 
                     value={inputText}
                     onChange={(e) => setInputText(e.target.value)}
                     placeholder="[CRI]_[ANX]_[IND]_[NUM]_[DESC] ..."
-                    className="flex-1 w-full p-6 text-xs font-mono bg-white resize-none outline-none focus:bg-slate-50/30 transition-colors leading-relaxed"
+                    className="flex-1 w-full p-7 text-xs font-mono bg-white resize-none outline-none focus:bg-rose-50/10 transition-colors leading-relaxed placeholder:text-slate-300"
                   />
 
-                  <div className="px-4 pb-4">
-                    <div className="rounded-xl border border-slate-200 bg-white p-3">
+                  <div className="px-5 pb-5">
+                    <div className="rounded-3xl border border-rose-100 bg-gradient-to-br from-rose-50/80 via-white to-slate-50 p-4 shadow-inner">
                       <div className="flex items-start gap-3">
-                        <div className="w-9 h-9 rounded-xl bg-rose-50 border border-rose-100 flex items-center justify-center shrink-0">
-                          <Bot className="w-4 h-4 text-rose-800" />
+                        <div className="w-12 h-12 rounded-2xl bg-rose-900 border border-rose-800 flex items-center justify-center shrink-0 shadow-lg shadow-rose-900/20">
+                          <Bot className="w-5 h-5 text-white" />
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center justify-between gap-3">
-                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Asistente de análisis local</div>
+                            <div>
+                              <div className="text-[10px] font-black text-rose-800 uppercase tracking-[0.24em]">Asistente de análisis local</div>
+                              <div className="mt-1 text-xs font-semibold text-slate-700">Lectura automática, OCR y preparación previa al análisis</div>
+                            </div>
                             <div className={cn(
-                              'text-[10px] font-black uppercase tracking-widest',
+                              'rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-widest',
                               localAnalysis.status === 'running'
-                                ? 'text-amber-700'
+                                ? 'border-amber-200 bg-amber-50 text-amber-800'
                                 : localAnalysis.status === 'done'
-                                  ? 'text-green-700'
+                                  ? 'border-green-200 bg-green-50 text-green-700'
                                   : localAnalysis.status === 'error'
-                                    ? 'text-red-700'
-                                    : 'text-slate-400'
+                                    ? 'border-red-200 bg-red-50 text-red-700'
+                                    : 'border-slate-200 bg-white text-slate-400'
                             )}>
                               {localAnalysis.status === 'running'
                                 ? `Leyendo (${Math.round(localAnalysis.progress * 100)}%)`
@@ -847,7 +861,7 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                             </div>
                           </div>
 
-                          <div className="mt-2 text-[11px] text-slate-700 bg-slate-50 border border-slate-100 rounded-xl px-3 py-2">
+                          <div className="mt-4 text-[12px] text-slate-700 bg-white/85 border border-white rounded-2xl px-4 py-3 shadow-sm">
                             {localAnalysisFiles.length > 0
                               ? localAnalysis.status === 'done'
                                 ? `${localAnalysisFiles.length} archivo(s) leído(s). Ya podés ejecutar el análisis.`
@@ -857,7 +871,7 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                               : 'Elegí PDF o imágenes aquí. Voy a leer el contenido antes de habilitar Ejecutar Análisis.'}
                           </div>
 
-                          <div className="mt-3 flex items-center gap-3">
+                          <div className="mt-4 flex items-center gap-3">
                             <input
                               type="file"
                               multiple
@@ -865,22 +879,22 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                                 const files = Array.from(e.target.files ?? []);
                                 void readLocalAnalysisFiles(files);
                               }}
-                              className="block w-full text-xs text-slate-600 file:mr-3 file:rounded-lg file:border file:border-slate-200 file:bg-slate-50 file:px-3 file:py-1.5 file:text-[10px] file:font-black file:uppercase file:tracking-widest file:text-slate-700 hover:file:bg-slate-100"
+                              className="block w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 shadow-sm file:mr-3 file:rounded-xl file:border-0 file:bg-rose-900 file:px-4 file:py-2 file:text-[10px] file:font-black file:uppercase file:tracking-widest file:text-white hover:file:bg-rose-800"
                               accept=".pdf,.png,.jpg,.jpeg,.webp"
                             />
                           </div>
                           {localAnalysis.status === 'error' && (
-                            <div className="mt-2 text-[11px] text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                            <div className="mt-3 text-[11px] text-red-700 bg-red-50 border border-red-100 rounded-2xl px-4 py-3">
                               Fallo el analisis local: {localAnalysis.error}
                             </div>
                           )}
                           {localAnalysisDocs.length > 0 && (
-                            <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
+                            <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                               <div className="mb-2 flex items-center justify-between gap-3">
                                 <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Texto rescatado</div>
-                                <div className="text-[10px] font-black text-green-700 uppercase tracking-widest">Listo para analizar</div>
+                                <div className="rounded-full bg-green-50 px-3 py-1 text-[10px] font-black text-green-700 uppercase tracking-widest">Listo para analizar</div>
                               </div>
-                              <div className="max-h-28 overflow-y-auto whitespace-pre-wrap text-[11px] leading-relaxed text-slate-700">
+                              <div className="max-h-32 overflow-y-auto whitespace-pre-wrap rounded-xl bg-slate-50 p-3 text-[11px] leading-relaxed text-slate-700">
                                 {localAnalysisDocs.map((d) => d.text).join('\n\n---\n\n').slice(0, 1800)}
                               </div>
                             </div>
@@ -889,15 +903,15 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                       </div>
                     </div>
                   </div>
-                  <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between">
-                    <div className="flex gap-6">
-                      <div className="flex items-center gap-2">
+                  <div className="p-5 border-t border-slate-100 bg-gradient-to-r from-slate-50 to-white flex items-center justify-between gap-4 max-md:flex-col max-md:items-stretch">
+                    <div className="flex flex-wrap gap-3">
+                      <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 shadow-sm">
                         <div className="w-1.5 h-1.5 rounded-full bg-slate-400"></div>
-                        <span className="text-[10px] font-semibold text-slate-500">Muestreo Aleatorio</span>
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Muestreo Aleatorio</span>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 rounded-full border border-rose-100 bg-rose-50 px-3 py-1.5 shadow-sm">
                         <div className="w-1.5 h-1.5 rounded-full bg-rose-700"></div>
-                        <span className="text-[10px] font-semibold text-rose-800">Integridad de Matriz</span>
+                        <span className="text-[10px] font-bold text-rose-800 uppercase tracking-widest">Integridad de Matriz</span>
                       </div>
                     </div>
                     <button 
@@ -909,7 +923,7 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                         runLocalFileAnalysis();
                       }}
                       disabled={isAnalyzing || (!inputText.trim() && (localAnalysisFiles.length === 0 || localAnalysis.status !== 'done'))}
-                      className="bg-slate-900 hover:bg-black text-white px-8 py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest shadow-lg shadow-slate-200 disabled:opacity-50 flex items-center gap-2 transition-all active:scale-95"
+                      className="bg-gradient-to-r from-rose-950 to-rose-800 hover:from-rose-900 hover:to-rose-700 text-white px-9 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest shadow-xl shadow-rose-900/20 disabled:from-slate-300 disabled:to-slate-400 disabled:shadow-none disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all active:scale-95"
                     >
                       {isAnalyzing ? (
                         <>
@@ -931,13 +945,13 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                 key="dashboard"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                className="flex-1 overflow-y-auto pb-8 space-y-6"
+                className="flex-1 overflow-y-auto pb-8 space-y-6 pr-1"
               >
                 {/* Real Data Visualizations */}
                 <div className="grid grid-cols-12 gap-5">
                   {/* Status Pie Chart */}
-                  <div className="col-span-12 lg:col-span-4 bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
-                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                  <div className="col-span-12 lg:col-span-4 bg-white/90 border border-white rounded-3xl p-5 shadow-[0_18px_60px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70">
+                    <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
                       <PieIcon className="w-3 h-3 text-rose-700" /> Distribución de Cumplimiento
                     </h4>
                     <div className="h-64 w-full">
@@ -964,8 +978,8 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                   </div>
 
                   {/* Documents by Type Bar Chart */}
-                  <div className="col-span-12 lg:col-span-8 bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
-                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                  <div className="col-span-12 lg:col-span-8 bg-white/90 border border-white rounded-3xl p-5 shadow-[0_18px_60px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70">
+                    <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
                       <BarChart3 className="w-3 h-3 text-rose-700" /> Evidencias por Categoría
                     </h4>
                     <div className="h-64 w-full">
@@ -975,15 +989,15 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                           <XAxis dataKey="name" fontSize={10} fontWeight={700} axisLine={false} tickLine={false} />
                           <YAxis fontSize={10} fontWeight={700} axisLine={false} tickLine={false} />
                           <Tooltip cursor={{fill: '#f8fafc'}} />
-                          <Bar dataKey="value" fill="#6366f1" radius={[4, 4, 0, 0]} barSize={40} />
+                          <Bar dataKey="value" fill="#9f1239" radius={[8, 8, 0, 0]} barSize={40} />
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
                   </div>
 
                   {/* Trend Line Chart */}
-                  <div className="col-span-12 bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
-                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                  <div className="col-span-12 bg-white/90 border border-white rounded-3xl p-5 shadow-[0_18px_60px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70">
+                    <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
                       <LineIcon className="w-3 h-3 text-rose-700" /> Evolución del Enfoque Matemático (Ratio %)
                     </h4>
                     <div className="h-64 w-full">
@@ -993,7 +1007,7 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                           <XAxis dataKey="year" fontSize={10} fontWeight={700} axisLine={false} tickLine={false} />
                           <YAxis fontSize={10} fontWeight={700} axisLine={false} tickLine={false} />
                           <Tooltip />
-                          <Line type="monotone" dataKey="ratio" name="% Enfoque Alto" stroke="#6366f1" strokeWidth={3} dot={{ r: 4, fill: '#6366f1' }} activeDot={{ r: 6 }} />
+                          <Line type="monotone" dataKey="ratio" name="% Enfoque Alto" stroke="#9f1239" strokeWidth={3} dot={{ r: 4, fill: '#9f1239' }} activeDot={{ r: 6 }} />
                           <Line type="monotone" dataKey="docs" name="Volumen Docs" stroke="#cbd5e1" strokeWidth={2} strokeDasharray="5 5" />
                         </LineChart>
                       </ResponsiveContainer>
@@ -1009,7 +1023,7 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                         setSelectedIndicator(indicator);
                         setActiveTab('results');
                       }}
-                      className="bg-white border border-slate-200 rounded-lg p-3 hover:shadow-md hover:border-rose-300 transition-all cursor-pointer group flex flex-col gap-3 relative shadow-sm"
+                      className="bg-white/90 border border-white rounded-2xl p-4 hover:shadow-xl hover:shadow-rose-900/10 hover:border-rose-200 transition-all cursor-pointer group flex flex-col gap-3 relative shadow-sm ring-1 ring-slate-200/70"
                     >
                       <div className="flex justify-between items-start">
                         <span className="text-[10px] font-black font-mono text-rose-800">{indicator.indicator}</span>
@@ -1039,12 +1053,12 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                 className="flex-1 flex flex-col gap-5 overflow-hidden"
               >
                 <div className="flex items-center justify-between shrink-0">
-                  <h2 className="text-xl font-black text-slate-800 uppercase tracking-tight">Motor de Búsqueda Avanzada</h2>
+                  <h2 className="text-2xl font-black text-slate-900 tracking-tight">Motor de Búsqueda Avanzada</h2>
                   <div className="flex gap-2">
                     <select 
                       value={filterType} 
                       onChange={(e) => setFilterType(e.target.value)}
-                      className="text-[10px] font-bold bg-white border border-slate-200 rounded px-3 py-1.5 outline-none focus:ring-1 focus:ring-rose-700"
+                      className="text-[10px] font-black bg-white border border-slate-200 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-rose-200 focus:border-rose-300 shadow-sm"
                     >
                       <option value="all">TODOS LOS TIPOS</option>
                       <option value="Normativo">NORMATIVO</option>
@@ -1054,7 +1068,7 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                     <select 
                       value={filterFocus} 
                       onChange={(e) => setFilterFocus(e.target.value)}
-                      className="text-[10px] font-bold bg-white border border-slate-200 rounded px-3 py-1.5 outline-none focus:ring-1 focus:ring-rose-700"
+                      className="text-[10px] font-black bg-white border border-slate-200 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-rose-200 focus:border-rose-300 shadow-sm"
                     >
                       <option value="all">TODOS LOS ENFOQUES</option>
                       <option value="alto">ALTO</option>
@@ -1064,8 +1078,8 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                   </div>
                 </div>
 
-                <div className="bg-white border border-slate-200 rounded-xl shadow-sm flex-1 flex flex-col overflow-hidden">
-                  <div className="p-3 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+                <div className="bg-white/90 border border-white rounded-3xl shadow-[0_18px_60px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 flex-1 flex flex-col overflow-hidden">
+                  <div className="p-4 border-b border-slate-100 bg-gradient-to-r from-white to-rose-50/30 flex items-center justify-between">
                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
                       <Search className="w-3.5 h-3.5" /> Resultados de Evidencia ({advancedFilteredDocuments.length})
                     </span>
@@ -1146,14 +1160,14 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                 className="flex-1 overflow-y-auto pb-8 space-y-6"
               >
                 <div className="flex items-center justify-between">
-                  <h2 className="text-xl font-black text-slate-800 uppercase tracking-tight">Matriz Oficial (con evidencias)</h2>
+                  <h2 className="text-2xl font-black text-slate-900 tracking-tight">Matriz Oficial con Evidencias</h2>
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total indicadores: {results.length}</p>
                 </div>
 
                 <div className="space-y-5">
                   {OFFICIAL_MATRIX.map((dim) => (
-                    <section key={dim.id} className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-                      <div className="p-4 bg-slate-50/50 border-b border-slate-200 flex items-center justify-between">
+                    <section key={dim.id} className="bg-white/90 border border-white rounded-3xl shadow-[0_18px_60px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 overflow-hidden">
+                      <div className="p-5 bg-gradient-to-r from-white to-rose-50/30 border-b border-slate-200 flex items-center justify-between">
                         <div>
                           <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Dimensión {dim.id}</div>
                           <div className="text-sm font-black text-slate-800">{dim.name}</div>
@@ -1223,7 +1237,7 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                 className="flex-1 overflow-y-auto pb-8 space-y-6"
               >
                 <div className="flex items-center justify-between">
-                  <h2 className="text-xl font-black text-slate-800 uppercase tracking-tight">Catálogo de Anexos (Drive)</h2>
+                  <h2 className="text-2xl font-black text-slate-900 tracking-tight">Catálogo de Anexos Drive</h2>
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total anexos: {catalog.items.length}</p>
                 </div>
 
@@ -1232,8 +1246,8 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                   const dimItems = catalog.byDimension.get(dimId) ?? [];
 
                   return (
-                    <section key={dimId} className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-                      <div className="p-4 bg-slate-50/50 border-b border-slate-200">
+                    <section key={dimId} className="bg-white/90 border border-white rounded-3xl shadow-[0_18px_60px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 overflow-hidden">
+                      <div className="p-5 bg-gradient-to-r from-white to-rose-50/30 border-b border-slate-200">
                         <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Dimensión {dimId}</div>
                         <div className="text-sm font-black text-slate-800">{dim?.name ?? 'Sin nombre'}</div>
                       </div>
@@ -1582,8 +1596,8 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                 className="flex-1 flex flex-col gap-4 overflow-hidden"
               >
                 {/* Active Indicator Header */}
-                <section className="bg-white p-4 border border-slate-200 rounded-lg shadow-sm shrink-0 flex justify-between items-start relative overflow-hidden">
-                  <div className="absolute top-0 left-0 w-1 h-full bg-rose-800"></div>
+                <section className="bg-white/90 p-5 border border-white rounded-3xl shadow-[0_18px_60px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 shrink-0 flex justify-between items-start relative overflow-hidden">
+                  <div className="absolute top-0 left-0 w-1.5 h-full bg-gradient-to-b from-rose-900 to-rose-500"></div>
                   <div>
                     <div className="flex items-center gap-3 mb-1">
                       <h2 className="text-sm font-black text-slate-800 uppercase tracking-tight">Análisis del Indicador {selectedIndicator.indicator}</h2>
@@ -1596,14 +1610,14 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                     </div>
                     <p className="text-[11px] text-slate-500 max-w-4xl leading-relaxed font-medium">{selectedIndicator.description}</p>
                   </div>
-                  <button className="px-4 py-1.5 bg-slate-900 hover:bg-black text-white text-[10px] font-bold uppercase tracking-widest rounded transition-all shadow-sm">Exportar Reporte</button>
+                  <button className="px-5 py-2.5 bg-rose-950 hover:bg-rose-900 text-white text-[10px] font-black uppercase tracking-widest rounded-2xl transition-all shadow-lg shadow-rose-900/20">Exportar Reporte</button>
                 </section>
 
                 <div className="grid grid-cols-12 gap-4 flex-1 overflow-hidden">
                   {/* Left Column: Documents & Gaps */}
                   <div className="col-span-12 lg:col-span-5 flex flex-col gap-4 overflow-hidden">
-                    <div className="bg-white border border-slate-200 rounded-lg flex flex-col flex-1 overflow-hidden shadow-sm">
-                      <div className="p-3 border-b border-slate-200 bg-slate-50/50 flex justify-between items-center">
+                    <div className="bg-white/90 border border-white rounded-3xl flex flex-col flex-1 overflow-hidden shadow-[0_18px_60px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70">
+                      <div className="p-4 border-b border-slate-200 bg-gradient-to-r from-white to-rose-50/30 flex justify-between items-center">
                         <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-500">Documentos Detectados</h3>
                         <span className="text-[10px] font-bold text-slate-400 bg-white border px-2 py-0.5 rounded uppercase">{selectedIndicator.documents.length} Archivos</span>
                       </div>
@@ -1649,7 +1663,7 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                     </div>
                     
                     {/* Brechas Section */}
-                    <div className="bg-rose-50 border border-rose-200 p-4 rounded-lg shadow-sm">
+                    <div className="bg-rose-50/90 border border-rose-200 p-5 rounded-3xl shadow-sm">
                       <h3 className="text-[10px] font-black text-rose-800 uppercase tracking-widest mb-3 flex items-center gap-2">
                         <AlertTriangle className="w-3 h-3" /> Brechas Críticas Detectadas
                       </h3>
@@ -1667,17 +1681,17 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                   {/* Right Column: Analysis & Summary */}
                   <div className="col-span-12 lg:col-span-7 flex flex-col gap-4 overflow-hidden">
                     <div className="grid grid-cols-2 gap-4">
-                      <div className="bg-white p-4 border border-slate-200 rounded-lg shadow-sm">
+                      <div className="bg-white/90 p-5 border border-white rounded-3xl shadow-sm ring-1 ring-slate-200/70">
                         <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Nivel de Cumplimiento</label>
                         <p className="text-2xl font-black text-slate-800 tracking-tight leading-none">{selectedIndicator.technicalAnalysis.complianceLevel}</p>
                       </div>
-                      <div className="bg-white p-4 border border-slate-200 rounded-lg shadow-sm">
+                      <div className="bg-white/90 p-5 border border-white rounded-3xl shadow-sm ring-1 ring-slate-200/70">
                         <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Coherencia Disciplinar</label>
                         <p className="text-2xl font-black text-rose-800 tracking-tight leading-none uppercase">{selectedIndicator.technicalAnalysis.mathCoherence}</p>
                       </div>
                     </div>
 
-                    <div className="bg-white border border-slate-200 rounded-lg p-5 flex-1 overflow-y-auto shadow-sm">
+                    <div className="bg-white/90 border border-white rounded-3xl p-5 flex-1 overflow-y-auto shadow-[0_18px_60px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70">
                       <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4 border-b border-slate-100 pb-2">Evaluación Técnica Exhaustiva</h3>
                       <div className="space-y-5 text-[11px] leading-relaxed text-slate-700 font-medium font-sans">
                         <div className="prose prose-slate prose-sm text-xs max-w-none">
@@ -1702,7 +1716,7 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                       </div>
                     </div>
 
-                    <div className="bg-rose-950 text-white p-4 rounded-lg shadow-xl relative overflow-hidden shrink-0 border border-rose-900">
+                    <div className="bg-gradient-to-br from-rose-950 to-slate-950 text-white p-5 rounded-3xl shadow-xl shadow-rose-950/20 relative overflow-hidden shrink-0 border border-rose-900">
                       <div className="absolute top-0 right-0 p-1 opacity-20"><BookOpen className="w-12 h-12" /></div>
                       <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-rose-200 mb-2">Resumen de Evidencia para Informe Final</h3>
                       <div className="text-[11px] leading-relaxed italic text-rose-50 font-serif border-l border-rose-400/30 pl-4 py-1">
@@ -1718,7 +1732,7 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
       </div>
 
       {/* Footer Status Bar */}
-      <footer className="h-8 bg-slate-900 text-white flex items-center px-6 justify-between shrink-0 z-20">
+      <footer className="h-9 bg-slate-950 text-white flex items-center px-7 justify-between shrink-0 z-20 shadow-[0_-10px_30px_rgba(15,23,42,0.12)] max-md:hidden">
         <div className="flex items-center gap-6 text-[9px] font-black tracking-widest uppercase">
           <span className="flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-green-400 shadow-[0_0_8px_rgba(74,222,128,0.5)]"></span>
