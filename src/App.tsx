@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { 
   FileSearch, 
   BarChart3, 
@@ -65,6 +65,7 @@ export default function App() {
   const [localAnalysis, setLocalAnalysis] = useState<{ status: 'idle' | 'running' | 'done' | 'error'; progress: number; error?: string }>(
     { status: 'idle', progress: 0 }
   );
+  const localAnalysisInputRef = useRef<HTMLInputElement | null>(null);
   
   // Advanced Search Filters
   const [filterType, setFilterType] = useState<string>('all');
@@ -862,6 +863,7 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
 
                           <div className="mt-4 flex items-center gap-3">
                             <input
+                              ref={localAnalysisInputRef}
                               type="file"
                               multiple
                               onChange={(e) => {
@@ -871,6 +873,20 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                               className="block w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 shadow-sm file:mr-3 file:rounded-xl file:border-0 file:bg-rose-900 file:px-4 file:py-2 file:text-[10px] file:font-black file:uppercase file:tracking-widest file:text-white hover:file:bg-rose-800"
                               accept=".pdf,.png,.jpg,.jpeg,.webp"
                             />
+                            {(localAnalysisFiles.length > 0 || localAnalysisDocs.length > 0 || localAnalysis.status !== 'idle') && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setLocalAnalysisFiles([]);
+                                  setLocalAnalysisDocs([]);
+                                  setLocalAnalysis({ status: 'idle', progress: 0 });
+                                  if (localAnalysisInputRef.current) localAnalysisInputRef.current.value = '';
+                                }}
+                                className="shrink-0 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500 shadow-sm transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-900"
+                              >
+                                Quitar
+                              </button>
+                            )}
                           </div>
                           {localAnalysis.status === 'error' && (
                             <div className="mt-3 text-[11px] text-red-700 bg-red-50 border border-red-100 rounded-2xl px-4 py-3">
