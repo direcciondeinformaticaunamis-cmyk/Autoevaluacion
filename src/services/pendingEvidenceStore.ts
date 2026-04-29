@@ -5,6 +5,8 @@ export type PendingEvidence = {
   indicatorId: string;
   dimensionId: string;
   year: string;
+  link?: string;
+  pending?: boolean;
   createdAt: number;
 };
 

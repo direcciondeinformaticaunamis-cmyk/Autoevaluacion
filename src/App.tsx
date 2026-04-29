@@ -329,11 +329,11 @@ export default function App() {
 
   const pendingCatalogItems: CatalogItem[] = pendingEvidence.map((p) => ({
     name: p.generatedName,
-    link: '',
+    link: p.link || '',
     indicatorId: p.indicatorId,
     dimensionId: p.dimensionId,
     year: p.year,
-    pending: true,
+    pending: p.pending ?? true,
   }));
 
   const catalog = buildCatalogIndex(pendingCatalogItems);
@@ -459,47 +459,69 @@ export default function App() {
     if (!opt) return;
 
     setIsUploading(true);
-    await new Promise(resolve => setTimeout(resolve, 400));
+    try {
+      const nowYear = new Date().getFullYear().toString();
+      const allKnownNames = [
+        ...catalog.items.map((x) => x.name),
+        ...pendingEvidence.map((p) => p.generatedName),
+      ];
+      const maxByCriterion = buildMaxAnexoByCriterion(allKnownNames);
 
-    const nowYear = new Date().getFullYear().toString();
-    const allKnownNames = [
-      ...catalog.items.map((x) => x.name),
-      ...pendingEvidence.map((p) => p.generatedName),
-    ];
-    const maxByCriterion = buildMaxAnexoByCriterion(allKnownNames);
+      let next = pendingEvidence;
+      for (const f of uploadFiles) {
+        const base = f.name.replace(/\.[^.]+$/, '');
+        const ext = (f.name.match(/\.[^.]+$/)?.[0] ?? '').toLowerCase();
+        const safe = base.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
 
-    let next = pendingEvidence;
-    for (const f of uploadFiles) {
-      const base = f.name.replace(/\.[^.]+$/, '');
-      const ext = (f.name.match(/\.[^.]+$/)?.[0] ?? '').toLowerCase();
-      const safe = base.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+        // Consecutive ANEXO number is per criterio folder (e.g. 2.1, 3.2, ...).
+        const anexoNum = nextAnexoForCriterion(maxByCriterion, opt.criterionId);
+        const anexoStr = String(anexoNum).padStart(3, '0');
+        const generatedName = `C${opt.dimensionId}_ANEXO_${anexoStr}_${opt.indicator}_01_${safe}${ext || ''}`;
 
-      // Consecutive ANEXO number is per criterio folder (e.g. 2.1, 3.2, ...).
-      const anexoNum = nextAnexoForCriterion(maxByCriterion, opt.criterionId);
-      const anexoStr = String(anexoNum).padStart(3, '0');
-      const generatedName = `C${opt.dimensionId}_ANEXO_${anexoStr}_${opt.indicator}_01_${safe}${ext || ''}`;
+        const form = new FormData();
+        form.append('file', f, generatedName);
+        form.append('generatedName', generatedName);
+        form.append('indicatorId', opt.indicator.toLowerCase());
+        form.append('criterionId', opt.criterionId.toLowerCase());
+        form.append('dimensionId', opt.dimensionId);
 
-      next = addPendingEvidence(next, {
-        originalName: f.name,
-        generatedName,
-        indicatorId: opt.indicator.toLowerCase(),
-        dimensionId: opt.dimensionId,
-        year: nowYear,
+        const response = await fetch('/api/drive/upload', {
+          method: 'POST',
+          credentials: 'include',
+          body: form,
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data?.ok) {
+          throw new Error(data?.error || 'No se pudo subir el archivo a Drive.');
+        }
+
+        next = addPendingEvidence(next, {
+          originalName: f.name,
+          generatedName,
+          indicatorId: opt.indicator.toLowerCase(),
+          dimensionId: opt.dimensionId,
+          year: nowYear,
+          link: data.file?.link || '',
+          pending: false,
+        });
+      }
+
+      setPendingEvidence(next);
+      setUploadFiles([]);
+      setSelectedIndicatorForUpload('');
+      setUploadDescription('');
+      setPdfExtract({ status: 'idle', text: '' });
+      setOcrState({ status: 'idle', progress: 0 });
+      setPreviewUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return '';
       });
+      setActiveTab('catalog');
+    } catch (err: any) {
+      alert(`No se pudo subir a Drive: ${String(err?.message || err)}`);
+    } finally {
+      setIsUploading(false);
     }
-
-    setPendingEvidence(next);
-    setUploadFiles([]);
-    setSelectedIndicatorForUpload('');
-    setUploadDescription('');
-    setPdfExtract({ status: 'idle', text: '' });
-    setOcrState({ status: 'idle', progress: 0 });
-    setPreviewUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return '';
-    });
-    setIsUploading(false);
-    setActiveTab('catalog');
   };
 
   const getDashboardData = () => {
@@ -577,6 +599,7 @@ export default function App() {
   const recentDocuments = dashboardDocuments.slice(-6).reverse();
   const maxTypeDocs = Math.max(1, ...dashboardData.typeData.map((item) => item.value));
   const maxYearDocs = Math.max(1, ...dashboardData.trendData.map((item) => item.docs));
+  const pendingOnlyEvidence = pendingEvidence.filter((p) => p.pending ?? true);
 
   return (
     <div className="flex flex-col h-screen w-full bg-[radial-gradient(circle_at_top_left,rgba(244,63,94,0.08),transparent_34%),linear-gradient(135deg,#fff7f8_0%,#f8fafc_42%,#eef2f7_100%)] text-slate-900 font-sans select-none overflow-hidden">
@@ -1863,14 +1886,14 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                       </select>
                     </div>
 
-                    {pendingEvidence.length > 0 && (
+                    {pendingOnlyEvidence.length > 0 && (
                       <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm">
                         <div className="flex items-center justify-between mb-2">
                           <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Pendientes de Subir</div>
-                          <div className="text-[10px] font-black text-rose-800 uppercase tracking-widest">{pendingEvidence.length}</div>
+                          <div className="text-[10px] font-black text-rose-800 uppercase tracking-widest">{pendingOnlyEvidence.length}</div>
                         </div>
                         <div className="max-h-40 overflow-y-auto divide-y divide-slate-100">
-                          {pendingEvidence.slice(0, 20).map((p) => (
+                          {pendingOnlyEvidence.slice(0, 20).map((p) => (
                             <div key={p.id} className="py-2 flex items-center justify-between gap-3">
                               <div className="min-w-0">
                                 <div className="truncate font-mono text-[11px] font-bold text-slate-800">{p.generatedName}</div>
@@ -1886,7 +1909,7 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                             </div>
                           ))}
                         </div>
-                        {pendingEvidence.length > 20 && (
+                        {pendingOnlyEvidence.length > 20 && (
                           <div className="mt-2 text-[10px] text-slate-400 font-semibold italic">Mostrando 20 (ver todos en Catálogo)</div>
                         )}
                       </div>
@@ -1896,8 +1919,8 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                       <div className="absolute top-0 right-0 p-2 opacity-10"><Database className="w-12 h-12 text-rose-300" /></div>
                       <h4 className="text-[10px] font-black text-rose-300 uppercase tracking-[0.2em] mb-4">Información de Sistema</h4>
                       <div className="space-y-3 text-[11px] font-medium leading-relaxed opacity-90">
-                        <p>• Los archivos se renombrarán automáticamente según la norma institutional UNAMIS (Criterio_Anexo_Indicador_Desc).</p>
-                        <p>• El análisis disciplinar en matemática se ejecutará en la próxima actualización de matriz.</p>
+                        <p>• Los archivos se renombrarán automáticamente según la norma institucional UNAMIS.</p>
+                        <p>• Al vincular, se suben a Google Drive en la carpeta configurada para el indicador o criterio.</p>
                       </div>
                       <button 
                         onClick={executeUpload}
@@ -1905,9 +1928,9 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                         className="w-full mt-8 bg-rose-800 hover:bg-rose-700 disabled:bg-slate-700 text-white font-black uppercase text-[10px] tracking-widest py-3 rounded-lg transition-all flex items-center justify-center gap-2"
                       >
                         {isUploading ? (
-                          <> <Loader2 className="w-4 h-4 animate-spin" /> Procesando Vinculación... </>
+                          <> <Loader2 className="w-4 h-4 animate-spin" /> Subiendo a Drive... </>
                         ) : (
-                          <> <Plus className="w-4 h-4" /> Vincular Evidencias a Matriz </>
+                          <> <Upload className="w-4 h-4" /> Subir a Drive y Vincular </>
                         )}
                       </button>
                     </div>
