@@ -556,6 +556,23 @@ export default function App() {
     dim.criteria.map((crit) => ({ id: crit.id, name: crit.name, dimensionId: dim.id }))
   );
   const normalizedCatalogSearch = catalogSearchTerm.trim().toLowerCase();
+  const dashboardData = getDashboardData();
+  const dashboardDocuments = results.flatMap((r) => r.documents.map((doc) => ({ ...doc, indicator: r.indicator, indicatorDesc: r.description })));
+  const dashboardStats = {
+    total: results.length,
+    completed: results.filter((r) => r.state === 'Completo').length,
+    partial: results.filter((r) => r.state === 'Parcial').length,
+    weak: results.filter((r) => r.state === 'Débil').length,
+    docs: dashboardDocuments.length,
+  };
+  const dashboardProgress = dashboardStats.total > 0 ? Math.round((dashboardStats.completed / dashboardStats.total) * 100) : 0;
+  const criticalIndicators = results
+    .filter((r) => r.state !== 'Completo')
+    .sort((a, b) => (a.state === 'Débil' ? -1 : 1) - (b.state === 'Débil' ? -1 : 1) || a.documents.length - b.documents.length)
+    .slice(0, 6);
+  const recentDocuments = dashboardDocuments.slice(-6).reverse();
+  const maxTypeDocs = Math.max(1, ...dashboardData.typeData.map((item) => item.value));
+  const maxYearDocs = Math.max(1, ...dashboardData.trendData.map((item) => item.docs));
 
   return (
     <div className="flex flex-col h-screen w-full bg-[radial-gradient(circle_at_top_left,rgba(244,63,94,0.08),transparent_34%),linear-gradient(135deg,#fff7f8_0%,#f8fafc_42%,#eef2f7_100%)] text-slate-900 font-sans select-none overflow-hidden">
@@ -707,13 +724,13 @@ export default function App() {
                     setActiveTab('results');
                   }}
                   className={cn(
-                    "my-1 rounded-xl p-3 cursor-pointer border-l-4 transition-all group",
+                    "my-1 rounded-xl px-3 py-2.5 cursor-pointer border-l-4 transition-all group",
                     selectedIndicator?.indicator === indicator.indicator 
                       ? "bg-rose-50 border-rose-800 shadow-sm" 
                       : cn("hover:bg-white hover:shadow-sm", getIndicatorBorder(indicator.state))
                   )}
                 >
-                  <div className="flex justify-between items-start mb-1">
+                  <div className="flex justify-between items-start mb-1 gap-2">
                     <span className={cn(
                       "text-[10px] font-black font-mono",
                       selectedIndicator?.indicator === indicator.indicator ? "text-rose-900" : "text-slate-500"
@@ -721,14 +738,14 @@ export default function App() {
                       {indicator.indicator}
                     </span>
                     <span className={cn(
-                      "px-1.5 py-0.5 rounded text-[8px] font-bold uppercase",
+                      "px-1.5 py-0.5 rounded text-[8px] font-bold uppercase shrink-0",
                       getStatusColor(indicator.state)
                     )}>
                       {indicator.state}
                     </span>
                   </div>
                   <p className={cn(
-                    "text-[11px] font-medium leading-tight line-clamp-2 transition-colors",
+                    "text-[10px] font-semibold leading-tight line-clamp-2 transition-colors",
                     selectedIndicator?.indicator === indicator.indicator ? "text-rose-950" : "text-slate-600 group-hover:text-slate-900"
                   )}>
                     {indicator.description}
@@ -999,28 +1016,66 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                 key="dashboard"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                className="flex-1 overflow-y-auto pb-8 space-y-6 pr-1"
+                className="flex-1 overflow-y-auto pb-10 space-y-6 pr-1"
               >
-                {/* Real Data Visualizations */}
+                <div className="rounded-3xl border border-white bg-white/85 p-6 shadow-[0_18px_60px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 backdrop-blur-xl">
+                  <div className="flex items-start justify-between gap-4 max-lg:flex-col">
+                    <div>
+                      <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-rose-100 bg-rose-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.24em] text-rose-800">
+                        <BarChart3 className="h-3 w-3" /> Resumen del análisis
+                      </div>
+                      <h2 className="text-3xl font-black tracking-tight text-slate-950 max-md:text-2xl">Panel de Autoevaluación</h2>
+                      <p className="mt-2 text-sm font-semibold text-slate-500">Lectura ejecutiva de cobertura, brechas y documentos detectados.</p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-right shadow-sm">
+                      <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Avance general</div>
+                      <div className="text-2xl font-black text-rose-900">{dashboardProgress}%</div>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+                    {[
+                      { label: 'Indicadores analizados', value: dashboardStats.total, icon: ListTodo, tone: 'slate' },
+                      { label: 'Completos', value: dashboardStats.completed, icon: CheckCircle2, tone: 'green' },
+                      { label: 'Parciales', value: dashboardStats.partial, icon: Clock, tone: 'amber' },
+                      { label: 'Débiles', value: dashboardStats.weak, icon: AlertTriangle, tone: 'rose' },
+                      { label: 'Documentos detectados', value: dashboardStats.docs, icon: FileText, tone: 'slate' },
+                    ].map((card, index) => {
+                      const Icon = card.icon;
+                      return (
+                        <motion.div
+                          key={card.label}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.35, delay: index * 0.04 }}
+                          className="rounded-2xl border border-white bg-white p-4 shadow-sm ring-1 ring-slate-200/70"
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <div className={cn(
+                              'flex h-10 w-10 items-center justify-center rounded-2xl ring-1',
+                              card.tone === 'green' ? 'bg-green-50 text-green-700 ring-green-100' : card.tone === 'amber' ? 'bg-amber-50 text-amber-700 ring-amber-100' : card.tone === 'rose' ? 'bg-rose-50 text-rose-800 ring-rose-100' : 'bg-slate-50 text-slate-700 ring-slate-100'
+                            )}>
+                              <Icon className="h-4 w-4" />
+                            </div>
+                            <div className="text-2xl font-black text-slate-950">{card.value}</div>
+                          </div>
+                          <div className="mt-3 text-[10px] font-black uppercase tracking-widest text-slate-500">{card.label}</div>
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-12 gap-5">
-                  {/* Status Pie Chart */}
-                  <div className="col-span-12 lg:col-span-4 bg-white/90 border border-white rounded-3xl p-5 shadow-[0_18px_60px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70">
-                    <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-                      <PieIcon className="w-3 h-3 text-rose-700" /> Distribución de Cumplimiento
+                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="col-span-12 lg:col-span-4 rounded-3xl border border-white bg-white/90 p-5 shadow-[0_18px_60px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70">
+                    <h4 className="mb-4 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                      <PieIcon className="h-3 w-3 text-rose-700" /> Distribución de cumplimiento
                     </h4>
-                    <div className="h-64 w-full">
+                    <div className="relative h-64 w-full">
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
-                          <Pie
-                            data={getDashboardData().statusData}
-                            cx="50%"
-                            cy="50%"
-                            innerRadius={60}
-                            outerRadius={80}
-                            paddingAngle={5}
-                            dataKey="value"
-                          >
-                            {getDashboardData().statusData.map((entry, index) => (
+                          <Pie data={dashboardData.statusData} cx="50%" cy="50%" innerRadius={66} outerRadius={86} paddingAngle={5} dataKey="value">
+                            {dashboardData.statusData.map((entry, index) => (
                               <Cell key={`cell-${index}`} fill={entry.color} />
                             ))}
                           </Pie>
@@ -1028,73 +1083,129 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                           <ReLegend verticalAlign="bottom" height={36}/>
                         </PieChart>
                       </ResponsiveContainer>
+                      <div className="pointer-events-none absolute inset-0 flex items-center justify-center pb-8">
+                        <div className="text-center">
+                          <div className="text-3xl font-black text-slate-950">{dashboardProgress}%</div>
+                          <div className="text-[9px] font-black uppercase tracking-widest text-slate-400">Completo</div>
+                        </div>
+                      </div>
                     </div>
+                  </motion.div>
+
+                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="col-span-12 lg:col-span-8 rounded-3xl border border-white bg-white/90 p-5 shadow-[0_18px_60px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70">
+                    <h4 className="mb-5 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                      <BarChart3 className="h-3 w-3 text-rose-700" /> Evidencias por categoría
+                    </h4>
+                    {dashboardData.typeData.length > 0 ? (
+                      <div className="space-y-4">
+                        {dashboardData.typeData.map((item) => (
+                          <div key={item.name} className="rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
+                            <div className="mb-2 flex items-center justify-between gap-3">
+                              <div className="text-sm font-black text-slate-800">{item.name}</div>
+                              <div className="rounded-full bg-white px-3 py-1 text-[10px] font-black uppercase tracking-widest text-rose-800 ring-1 ring-rose-100">{item.value} docs</div>
+                            </div>
+                            <div className="h-3 overflow-hidden rounded-full bg-white ring-1 ring-slate-200">
+                              <motion.div initial={{ width: 0 }} animate={{ width: `${Math.max(8, (item.value / maxTypeDocs) * 100)}%` }} transition={{ duration: 0.7 }} className="h-full rounded-full bg-gradient-to-r from-rose-950 to-rose-600" />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center">
+                        <FileSearch className="mx-auto h-8 w-8 text-slate-300" />
+                        <div className="mt-3 text-sm font-black text-slate-500">Sin documentos detectados todavía</div>
+                        <p className="mt-1 text-xs font-semibold text-slate-400">Ejecutá un análisis con evidencias para visualizar categorías.</p>
+                      </div>
+                    )}
+                  </motion.div>
+                </div>
+
+                <div className="grid grid-cols-12 gap-5">
+                  <div className="col-span-12 lg:col-span-6 rounded-3xl border border-white bg-white/90 p-5 shadow-[0_18px_60px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70">
+                    <h4 className="mb-4 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                      <AlertTriangle className="h-3 w-3 text-rose-700" /> Indicadores críticos
+                    </h4>
+                    {criticalIndicators.length > 0 ? (
+                      <div className="space-y-2">
+                        {criticalIndicators.map((indicator) => (
+                          <button
+                            key={indicator.indicator}
+                            onClick={() => {
+                              setSelectedIndicator(indicator);
+                              setActiveTab('results');
+                            }}
+                            className="group flex w-full items-start justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-rose-200 hover:bg-rose-50/30 hover:shadow-md"
+                          >
+                            <div className="min-w-0">
+                              <div className="font-mono text-xs font-black text-rose-900">{indicator.indicator}</div>
+                              <div className="mt-1 line-clamp-2 text-xs font-semibold leading-snug text-slate-600">{indicator.description}</div>
+                            </div>
+                            <span className={cn('shrink-0 rounded-full border px-2.5 py-1 text-[9px] font-black uppercase tracking-widest', getStatusColor(indicator.state))}>{indicator.state}</span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="rounded-2xl border border-green-100 bg-green-50 p-6 text-center text-sm font-bold text-green-700">No hay indicadores críticos en este análisis.</div>
+                    )}
                   </div>
 
-                  {/* Documents by Type Bar Chart */}
-                  <div className="col-span-12 lg:col-span-8 bg-white/90 border border-white rounded-3xl p-5 shadow-[0_18px_60px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70">
-                    <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-                      <BarChart3 className="w-3 h-3 text-rose-700" /> Evidencias por Categoría
+                  <div className="col-span-12 lg:col-span-6 rounded-3xl border border-white bg-white/90 p-5 shadow-[0_18px_60px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70">
+                    <h4 className="mb-4 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                      <FileText className="h-3 w-3 text-rose-700" /> Últimos documentos detectados
                     </h4>
-                    <div className="h-64 w-full">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={getDashboardData().typeData}>
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                          <XAxis dataKey="name" fontSize={10} fontWeight={700} axisLine={false} tickLine={false} />
-                          <YAxis fontSize={10} fontWeight={700} axisLine={false} tickLine={false} />
-                          <Tooltip cursor={{fill: '#f8fafc'}} />
-                          <Bar dataKey="value" fill="#9f1239" radius={[8, 8, 0, 0]} barSize={40} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
+                    {recentDocuments.length > 0 ? (
+                      <div className="space-y-2">
+                        {recentDocuments.map((doc, idx) => (
+                          <div key={`${doc.indicator}-${doc.name}-${idx}`} className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-rose-50 text-rose-800 ring-1 ring-rose-100">
+                              <FileText className="h-4 w-4" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="truncate text-xs font-black text-slate-900">{doc.name}</div>
+                              <div className="mt-1 text-[10px] font-bold uppercase tracking-widest text-slate-400">{doc.indicator} · {doc.year}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm font-semibold text-slate-400">Sin documentos recientes.</div>
+                    )}
                   </div>
+                </div>
 
-                  {/* Trend Line Chart */}
-                  <div className="col-span-12 bg-white/90 border border-white rounded-3xl p-5 shadow-[0_18px_60px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70">
-                    <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-                      <LineIcon className="w-3 h-3 text-rose-700" /> Evolución del Enfoque Matemático (Ratio %)
-                    </h4>
-                    <div className="h-64 w-full">
+                <div className="rounded-3xl border border-white bg-white/90 p-5 shadow-[0_18px_60px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70">
+                  <h4 className="mb-5 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                    <LineIcon className="h-3 w-3 text-rose-700" /> Resumen anual
+                  </h4>
+                  {dashboardData.trendData.length > 1 ? (
+                    <div className="h-56 w-full">
                       <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={getDashboardData().trendData}>
+                        <LineChart data={dashboardData.trendData}>
                           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                           <XAxis dataKey="year" fontSize={10} fontWeight={700} axisLine={false} tickLine={false} />
                           <YAxis fontSize={10} fontWeight={700} axisLine={false} tickLine={false} />
                           <Tooltip />
-                          <Line type="monotone" dataKey="ratio" name="% Enfoque Alto" stroke="#9f1239" strokeWidth={3} dot={{ r: 4, fill: '#9f1239' }} activeDot={{ r: 6 }} />
-                          <Line type="monotone" dataKey="docs" name="Volumen Docs" stroke="#cbd5e1" strokeWidth={2} strokeDasharray="5 5" />
+                          <Line type="monotone" dataKey="docs" name="Documentos" stroke="#9f1239" strokeWidth={3} dot={{ r: 4, fill: '#9f1239' }} activeDot={{ r: 6 }} />
                         </LineChart>
                       </ResponsiveContainer>
                     </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                  {results.map((indicator, idx) => (
-                    <div 
-                      key={idx}
-                      onClick={() => {
-                        setSelectedIndicator(indicator);
-                        setActiveTab('results');
-                      }}
-                      className="bg-white/90 border border-white rounded-2xl p-4 hover:shadow-xl hover:shadow-rose-900/10 hover:border-rose-200 transition-all cursor-pointer group flex flex-col gap-3 relative shadow-sm ring-1 ring-slate-200/70"
-                    >
-                      <div className="flex justify-between items-start">
-                        <span className="text-[10px] font-black font-mono text-rose-800">{indicator.indicator}</span>
-                        <div className={cn("w-2 h-2 rounded-full", indicator.state === 'Completo' ? 'bg-green-500' : indicator.state === 'Parcial' ? 'bg-amber-500' : 'bg-red-500')}></div>
-                      </div>
-                      <h3 className="text-xs font-bold text-slate-800 line-clamp-2 leading-snug h-8">{indicator.description}</h3>
-                      <div className="flex items-center justify-between mt-auto pt-2 border-t border-slate-50">
-                        <span className="text-[9px] font-bold text-slate-400 uppercase">DOCS: {indicator.documents.length}</span>
-                        <span className={cn(
-                          "text-[9px] font-black uppercase tracking-tighter",
-                          indicator.state === 'Completo' ? 'text-green-600' : indicator.state === 'Parcial' ? 'text-amber-600' : 'text-red-600'
-                        )}>
-                          {indicator.state}
-                        </span>
+                  ) : dashboardData.trendData.length === 1 ? (
+                    <div className="rounded-2xl border border-amber-100 bg-amber-50/60 p-5">
+                      <div className="text-sm font-black text-amber-900">Sin suficiente información temporal</div>
+                      <p className="mt-1 text-xs font-semibold text-amber-800">El análisis solo contiene evidencias del año {dashboardData.trendData[0].year}. Se muestra una lectura anual simple.</p>
+                      <div className="mt-4 rounded-2xl border border-white bg-white p-4 shadow-sm">
+                        <div className="mb-2 flex items-center justify-between text-xs font-black text-slate-700">
+                          <span>{dashboardData.trendData[0].year}</span>
+                          <span>{dashboardData.trendData[0].docs} docs</span>
+                        </div>
+                        <div className="h-3 overflow-hidden rounded-full bg-slate-100">
+                          <motion.div initial={{ width: 0 }} animate={{ width: `${Math.max(8, (dashboardData.trendData[0].docs / maxYearDocs) * 100)}%` }} className="h-full rounded-full bg-gradient-to-r from-rose-950 to-rose-600" />
+                        </div>
                       </div>
                     </div>
-                  ))}
+                  ) : (
+                    <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm font-semibold text-slate-400">Sin información temporal disponible.</div>
+                  )}
                 </div>
               </motion.div>
             )}
