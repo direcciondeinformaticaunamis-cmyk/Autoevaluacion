@@ -822,9 +822,49 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                   <div className="px-5 pb-5">
                     <div className="rounded-3xl border border-rose-100 bg-gradient-to-br from-rose-50/80 via-white to-slate-50 p-4 shadow-inner">
                       <div className="flex items-start gap-3">
-                        <div className="w-12 h-12 rounded-2xl bg-rose-900 border border-rose-800 flex items-center justify-center shrink-0 shadow-lg shadow-rose-900/20">
-                          <Bot className="w-5 h-5 text-white" />
-                        </div>
+                        <motion.div
+                          className="relative flex h-14 w-14 shrink-0 items-center justify-center"
+                          animate={{ y: [0, -3, 0] }}
+                          transition={{ duration: 2.6, repeat: Infinity, ease: 'easeInOut' }}
+                        >
+                          <motion.div
+                            aria-hidden
+                            className="absolute inset-0 rounded-3xl bg-rose-500/20 blur-md"
+                            animate={{ scale: [0.9, 1.18, 0.9], opacity: [0.45, 0.85, 0.45] }}
+                            transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
+                          />
+                          <div className="relative h-12 w-12 overflow-hidden rounded-2xl border border-rose-700 bg-gradient-to-br from-rose-950 via-rose-800 to-rose-600 shadow-xl shadow-rose-900/25">
+                            <motion.div
+                              aria-hidden
+                              className="absolute inset-x-2 top-2 h-5 rounded-xl bg-white/95 shadow-inner"
+                              animate={{ opacity: [0.95, 1, 0.95] }}
+                              transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
+                            >
+                              <motion.span
+                                className="absolute left-2 top-1.5 h-1.5 w-1.5 rounded-full bg-rose-900"
+                                animate={{ scaleY: [1, 0.18, 1] }}
+                                transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}
+                              />
+                              <motion.span
+                                className="absolute right-2 top-1.5 h-1.5 w-1.5 rounded-full bg-rose-900"
+                                animate={{ scaleY: [1, 0.18, 1] }}
+                                transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}
+                              />
+                            </motion.div>
+                            <div className="absolute bottom-2 left-1/2 h-1 w-4 -translate-x-1/2 rounded-full bg-white/70" />
+                            <motion.div
+                              aria-hidden
+                              className="absolute -right-5 -top-5 h-10 w-10 rounded-full bg-white/20 blur-sm"
+                              animate={{ x: [-8, 4, -8], y: [4, -4, 4] }}
+                              transition={{ duration: 3.8, repeat: Infinity, ease: 'easeInOut' }}
+                            />
+                          </div>
+                          <motion.span
+                            className="absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full border-2 border-white bg-green-400 shadow-[0_0_12px_rgba(74,222,128,0.8)]"
+                            animate={{ scale: [1, 1.25, 1] }}
+                            transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+                          />
+                        </motion.div>
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center justify-between gap-3">
                             <div>
