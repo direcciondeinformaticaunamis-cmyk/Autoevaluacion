@@ -40,9 +40,13 @@ import { buildCatalogIndex } from './services/catalogIndex';
 import type { CatalogItem } from './services/catalogIndex';
 import {
   addPendingEvidence,
+  fetchPendingEvidence,
   loadPendingEvidence,
+  mergePendingEvidence,
+  PendingEvidence,
   removePendingEvidence,
   savePendingEvidence,
+  syncPendingEvidence,
 } from './services/pendingEvidenceStore';
 import { buildMaxAnexoByCriterion, nextAnexoForCriterion } from './services/anexoSequencer';
 import { extractPdfText, ocrImageText, ocrPdfText } from './services/pdfText';
@@ -103,6 +107,10 @@ export default function App() {
   }, [previewUrl]);
 
   const [pendingEvidence, setPendingEvidence] = useState(() => loadPendingEvidence());
+  const [recentlyCodifiedEvidence, setRecentlyCodifiedEvidence] = useState<PendingEvidence[]>([]);
+  const [codifiedEvidenceLinks, setCodifiedEvidenceLinks] = useState<Record<string, string>>({});
+  const [savingEvidenceLinkId, setSavingEvidenceLinkId] = useState('');
+  const [isCodifyingAnalyzedFiles, setIsCodifyingAnalyzedFiles] = useState(false);
 
   useEffect(() => {
     fetch('/api/me', { credentials: 'include' })
@@ -115,6 +123,21 @@ export default function App() {
       })
       .finally(() => setAuthChecked(true));
   }, []);
+
+  useEffect(() => {
+    if (!authedUser) return;
+    fetchPendingEvidence()
+      .then(async (remoteItems) => {
+        const merged = mergePendingEvidence(loadPendingEvidence(), remoteItems);
+        savePendingEvidence(merged);
+        setPendingEvidence(merged);
+        if (merged.length !== remoteItems.length) await syncPendingEvidence(merged);
+      })
+      .catch(() => {
+        // Keep the local cache usable if the server database is temporarily unavailable.
+        setPendingEvidence(loadPendingEvidence());
+      });
+  }, [authedUser]);
 
   // Gate the whole app behind a simple login.
   if (!authChecked) return null;
@@ -456,6 +479,19 @@ export default function App() {
     }
   };
 
+  const refreshPendingEvidenceBeforeCodifying = async () => {
+    try {
+      const remoteItems = await fetchPendingEvidence();
+      const merged = mergePendingEvidence(loadPendingEvidence(), remoteItems);
+      savePendingEvidence(merged);
+      setPendingEvidence(merged);
+      if (merged.length !== remoteItems.length) await syncPendingEvidence(merged);
+      return merged;
+    } catch {
+      return loadPendingEvidence();
+    }
+  };
+
   const executeUpload = async () => {
     if (uploadFiles.length === 0 || !selectedIndicatorForUpload) return;
     const opt = allIndicatorOptions.find((o) => o.indicator === selectedIndicatorForUpload);
@@ -463,6 +499,7 @@ export default function App() {
 
     setIsUploading(true);
     try {
+      const currentPendingEvidence = await refreshPendingEvidenceBeforeCodifying();
       const nowYear = new Date().getFullYear().toString();
       const driveLinks = uploadDriveLinks
         .split(/\r?\n/g)
@@ -470,11 +507,12 @@ export default function App() {
         .filter(Boolean);
       const allKnownNames = [
         ...catalog.items.map((x) => x.name),
-        ...pendingEvidence.map((p) => p.generatedName),
+        ...currentPendingEvidence.map((p) => p.generatedName),
       ];
       const maxByCriterion = buildMaxAnexoByCriterion(allKnownNames);
 
-      let next = pendingEvidence;
+      let next = currentPendingEvidence;
+      const createdEvidence: PendingEvidence[] = [];
       for (let idx = 0; idx < uploadFiles.length; idx += 1) {
         const f = uploadFiles[idx]!;
         const base = f.name.replace(/\.[^.]+$/, '');
@@ -505,9 +543,21 @@ export default function App() {
           link,
           pending: !link,
         });
+        createdEvidence.push(next[0]!);
       }
 
       setPendingEvidence(next);
+      setRecentlyCodifiedEvidence(createdEvidence.filter((item) => item.pending ?? true));
+      setCodifiedEvidenceLinks((prev) => {
+        const nextLinks = { ...prev };
+        for (const item of createdEvidence) nextLinks[item.id] = item.link || '';
+        return nextLinks;
+      });
+      try {
+        await syncPendingEvidence(next);
+      } catch {
+        alert('Los archivos se descargaron y quedaron guardados localmente, pero no se pudieron sincronizar con la base de datos del servidor.');
+      }
       setUploadFiles([]);
       setSelectedIndicatorForUpload('');
       setUploadDescription('');
@@ -526,7 +576,8 @@ export default function App() {
     }
   };
 
-  const codifyAnalyzedFilesForIndicator = (indicator: IndicatorAnalysis) => {
+  const codifyAnalyzedFilesForIndicator = async (indicator: IndicatorAnalysis) => {
+    if (isCodifyingAnalyzedFiles) return;
     if (localAnalysisFiles.length === 0) {
       alert('Primero seleccioná y analizá un archivo local en la Central de Carga.');
       return;
@@ -538,44 +589,62 @@ export default function App() {
       return;
     }
 
-    const nowYear = new Date().getFullYear().toString();
-    const allKnownNames = [
-      ...catalog.items.map((x) => x.name),
-      ...pendingEvidence.map((p) => p.generatedName),
-    ];
-    const maxByCriterion = buildMaxAnexoByCriterion(allKnownNames);
+    setIsCodifyingAnalyzedFiles(true);
+    try {
+      const currentPendingEvidence = await refreshPendingEvidenceBeforeCodifying();
+      const nowYear = new Date().getFullYear().toString();
+      const allKnownNames = [
+        ...catalog.items.map((x) => x.name),
+        ...currentPendingEvidence.map((p) => p.generatedName),
+      ];
+      const maxByCriterion = buildMaxAnexoByCriterion(allKnownNames);
 
-    let next = pendingEvidence;
-    for (const f of localAnalysisFiles) {
-      const base = f.name.replace(/\.[^.]+$/, '');
-      const ext = (f.name.match(/\.[^.]+$/)?.[0] ?? '').toLowerCase();
-      const safe = base.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
-      const anexoNum = nextAnexoForCriterion(maxByCriterion, opt.criterionId);
-      const anexoStr = String(anexoNum).padStart(3, '0');
-      const generatedName = `C${opt.dimensionId}_ANEXO_${anexoStr}_${opt.indicator}_01_${safe}${ext || ''}`;
+      let next = currentPendingEvidence;
+      const createdEvidence: PendingEvidence[] = [];
+      for (const f of localAnalysisFiles) {
+        const base = f.name.replace(/\.[^.]+$/, '');
+        const ext = (f.name.match(/\.[^.]+$/)?.[0] ?? '').toLowerCase();
+        const safe = base.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+        const anexoNum = nextAnexoForCriterion(maxByCriterion, opt.criterionId);
+        const anexoStr = String(anexoNum).padStart(3, '0');
+        const generatedName = `C${opt.dimensionId}_ANEXO_${anexoStr}_${opt.indicator}_01_${safe}${ext || ''}`;
 
-      const objectUrl = URL.createObjectURL(f);
-      const a = document.createElement('a');
-      a.href = objectUrl;
-      a.download = generatedName;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(objectUrl);
+        const objectUrl = URL.createObjectURL(f);
+        const a = document.createElement('a');
+        a.href = objectUrl;
+        a.download = generatedName;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(objectUrl);
 
-      next = addPendingEvidence(next, {
-        originalName: f.name,
-        generatedName,
-        indicatorId: opt.indicator.toLowerCase(),
-        dimensionId: opt.dimensionId,
-        year: nowYear,
-        link: '',
-        pending: true,
+        next = addPendingEvidence(next, {
+          originalName: f.name,
+          generatedName,
+          indicatorId: opt.indicator.toLowerCase(),
+          dimensionId: opt.dimensionId,
+          year: nowYear,
+          link: '',
+          pending: true,
+        });
+        createdEvidence.push(next[0]!);
+      }
+
+      setPendingEvidence(next);
+      setRecentlyCodifiedEvidence(createdEvidence);
+      setCodifiedEvidenceLinks((prev) => {
+        const nextLinks = { ...prev };
+        for (const item of createdEvidence) nextLinks[item.id] = '';
+        return nextLinks;
       });
+      try {
+        await syncPendingEvidence(next);
+      } catch {
+        alert('El archivo se descargó y quedó guardado localmente, pero no se pudo sincronizar con la base de datos del servidor.');
+      }
+    } finally {
+      setIsCodifyingAnalyzedFiles(false);
     }
-
-    setPendingEvidence(next);
-    setActiveTab('catalog');
   };
 
   const getDashboardData = () => {
@@ -625,6 +694,30 @@ export default function App() {
     if (localAnalysisInputRef.current) localAnalysisInputRef.current.value = '';
   };
 
+  const saveCodifiedEvidenceLink = async (evidenceId: string) => {
+    const link = codifiedEvidenceLinks[evidenceId]?.trim();
+    if (!link) return;
+
+    const updated = pendingEvidence.map((item) => item.id === evidenceId ? { ...item, link, pending: false } : item);
+    savePendingEvidence(updated);
+    setPendingEvidence(updated);
+    setSavingEvidenceLinkId(evidenceId);
+    try {
+      await syncPendingEvidence(updated);
+      setRecentlyCodifiedEvidence((prev) => prev.filter((item) => item.id !== evidenceId));
+      setCodifiedEvidenceLinks((prev) => {
+        const next = { ...prev };
+        delete next[evidenceId];
+        return next;
+      });
+      setActiveTab('catalog');
+    } catch {
+      alert('El link quedó guardado localmente, pero no se pudo sincronizar con el servidor.');
+    } finally {
+      setSavingEvidenceLinkId('');
+    }
+  };
+
   const calculateProgress = () => {
     if (results.length === 0) return 0;
     const completed = results.filter(r => r.state === 'Completo').length;
@@ -654,6 +747,9 @@ export default function App() {
   const maxTypeDocs = Math.max(1, ...dashboardData.typeData.map((item) => item.value));
   const maxYearDocs = Math.max(1, ...dashboardData.trendData.map((item) => item.docs));
   const pendingOnlyEvidence = pendingEvidence.filter((p) => p.pending ?? true);
+  const currentCodifiedEvidence = selectedIndicator
+    ? recentlyCodifiedEvidence.filter((p) => (p.pending ?? true) && p.indicatorId === selectedIndicator.indicator.toLowerCase())
+    : [];
   const selectedUploadOption = allIndicatorOptions.find((o) => o.indicator === selectedIndicatorForUpload);
   const uploadPreviewNames = (() => {
     if (!selectedUploadOption || uploadFiles.length === 0) return [];
@@ -1686,11 +1782,10 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                                                           onClick={() => {
                                                             const link = window.prompt('Pegá el hipervínculo de Drive para este anexo:')?.trim();
                                                             if (!link) return;
-                                                            setPendingEvidence((prev) => {
-                                                              const updated = prev.map((item) => item.id === it.pendingId ? { ...item, link, pending: false } : item);
-                                                              savePendingEvidence(updated);
-                                                              return updated;
-                                                            });
+                                                            const updated = pendingEvidence.map((item) => item.id === it.pendingId ? { ...item, link, pending: false } : item);
+                                                            savePendingEvidence(updated);
+                                                            setPendingEvidence(updated);
+                                                            syncPendingEvidence(updated).catch(() => alert('El link quedó guardado localmente, pero no se pudo sincronizar con el servidor.'));
                                                           }}
                                                           className="shrink-0 rounded-xl bg-rose-900 px-3 py-2 text-[9px] font-black uppercase tracking-widest text-white transition-colors hover:bg-rose-800"
                                                         >
@@ -2090,11 +2185,10 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                                   onClick={() => {
                                     const link = window.prompt('Pegá el hipervínculo de Drive para este anexo:')?.trim();
                                     if (!link) return;
-                                    setPendingEvidence((prev) => {
-                                      const updated = prev.map((item) => item.id === p.id ? { ...item, link, pending: false } : item);
-                                      savePendingEvidence(updated);
-                                      return updated;
-                                    });
+                                    const updated = pendingEvidence.map((item) => item.id === p.id ? { ...item, link, pending: false } : item);
+                                    savePendingEvidence(updated);
+                                    setPendingEvidence(updated);
+                                    syncPendingEvidence(updated).catch(() => alert('El link quedó guardado localmente, pero no se pudo sincronizar con el servidor.'));
                                   }}
                                   className="text-[10px] font-black uppercase tracking-widest text-rose-800 hover:text-rose-950"
                                   title="Agregar link de Drive"
@@ -2102,7 +2196,11 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                                   Link
                                 </button>
                                 <button
-                                  onClick={() => setPendingEvidence((prev) => removePendingEvidence(prev, p.id))}
+                                  onClick={() => {
+                                    const updated = removePendingEvidence(pendingEvidence, p.id);
+                                    setPendingEvidence(updated);
+                                    syncPendingEvidence(updated).catch(() => alert('Se quitó localmente, pero no se pudo sincronizar con el servidor.'));
+                                  }}
                                   className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-rose-900"
                                   title="Quitar de pendientes"
                                 >
@@ -2167,13 +2265,45 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                     </div>
                     <p className="text-[11px] text-slate-500 max-w-4xl leading-relaxed font-medium">{selectedIndicator.description}</p>
                   </div>
+                  {currentCodifiedEvidence.length > 0 && (
+                    <div className="min-w-[320px] flex-1 rounded-2xl border border-amber-200 bg-amber-50/80 p-3 shadow-sm max-lg:w-full max-lg:min-w-0">
+                      <div className="mb-2 text-[9px] font-black uppercase tracking-[0.18em] text-amber-700">Anexo codificado pendiente</div>
+                      <div className="space-y-2">
+                        {currentCodifiedEvidence.map((item) => (
+                          <div key={item.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 max-sm:grid-cols-1">
+                            <div className="min-w-0">
+                              <div className="truncate font-mono text-[10px] font-black text-slate-900" title={item.generatedName}>{item.generatedName}</div>
+                              <div className="text-[9px] font-bold uppercase tracking-widest text-slate-400">Subí a Drive y pegá el hipervínculo</div>
+                            </div>
+                            <div className="flex min-w-[260px] items-center gap-2 max-sm:min-w-0">
+                              <input
+                                value={codifiedEvidenceLinks[item.id] ?? ''}
+                                onChange={(event) => setCodifiedEvidenceLinks((prev) => ({ ...prev, [item.id]: event.target.value }))}
+                                placeholder="https://drive.google.com/..."
+                                className="h-9 min-w-0 flex-1 rounded-xl border border-amber-200 bg-white px-3 text-[11px] font-semibold text-slate-700 outline-none transition focus:border-rose-300 focus:ring-2 focus:ring-rose-100"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => saveCodifiedEvidenceLink(item.id)}
+                                disabled={!codifiedEvidenceLinks[item.id]?.trim() || savingEvidenceLinkId === item.id}
+                                className="h-9 rounded-xl bg-rose-900 px-3 text-[9px] font-black uppercase tracking-widest text-white transition-colors hover:bg-rose-800 disabled:bg-slate-300"
+                              >
+                                {savingEvidenceLinkId === item.id ? 'Guardando' : 'Guardar'}
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <div className="flex shrink-0 flex-wrap gap-2 max-lg:w-full">
                     {localAnalysisFiles.length > 0 && (
                       <button
                         onClick={() => codifyAnalyzedFilesForIndicator(selectedIndicator)}
+                        disabled={isCodifyingAnalyzedFiles}
                         className="px-5 py-2.5 bg-rose-950 hover:bg-rose-900 text-white text-[10px] font-black uppercase tracking-widest rounded-2xl transition-all shadow-lg shadow-rose-900/20 max-lg:flex-1"
                       >
-                        Descargar codificado
+                        {isCodifyingAnalyzedFiles ? 'Calculando último anexo...' : 'Descargar codificado'}
                       </button>
                     )}
                     <button className="px-5 py-2.5 bg-slate-900 hover:bg-black text-white text-[10px] font-black uppercase tracking-widest rounded-2xl transition-all shadow-lg shadow-slate-900/10 max-lg:flex-1">Exportar Reporte</button>

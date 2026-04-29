@@ -3,6 +3,7 @@ import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import crypto from 'crypto';
+import fs from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -14,6 +15,8 @@ app.use(express.json({ limit: '1mb' }));
 
 const PORT = process.env.PORT || 3000;
 const DIST_DIR = path.join(__dirname, 'dist');
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
+const PENDING_EVIDENCE_FILE = path.join(DATA_DIR, 'pending-evidence.json');
 
 const ALLOWED_USERS = new Set([
   'direccion',
@@ -83,6 +86,59 @@ function getUserFromReq(req) {
   return sess.user;
 }
 
+function requireAuth(req, res, next) {
+  const user = getUserFromReq(req);
+  if (!user) return res.status(401).json({ ok: false, error: 'unauthorized' });
+  req.user = user;
+  return next();
+}
+
+function ensureDataDir() {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+
+function readPendingEvidence() {
+  try {
+    if (!fs.existsSync(PENDING_EVIDENCE_FILE)) return [];
+    const raw = fs.readFileSync(PENDING_EVIDENCE_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (err) {
+    console.error('Could not read pending evidence database:', err);
+    return [];
+  }
+}
+
+function normalizePendingEvidenceItem(item) {
+  if (!item || typeof item !== 'object') return null;
+  const generatedName = String(item.generatedName || '').trim();
+  const indicatorId = String(item.indicatorId || '').trim().toLowerCase();
+  const dimensionId = String(item.dimensionId || '').trim();
+  if (!generatedName || !indicatorId || !dimensionId) return null;
+
+  return {
+    id: String(item.id || crypto.randomUUID()),
+    originalName: String(item.originalName || generatedName).trim(),
+    generatedName,
+    indicatorId,
+    dimensionId,
+    year: String(item.year || new Date().getFullYear()).trim(),
+    link: String(item.link || '').trim(),
+    pending: Boolean(item.pending ?? !String(item.link || '').trim()),
+    createdAt: Number.isFinite(Number(item.createdAt)) ? Number(item.createdAt) : Date.now(),
+  };
+}
+
+function writePendingEvidence(items) {
+  ensureDataDir();
+  const normalized = items
+    .map(normalizePendingEvidenceItem)
+    .filter(Boolean)
+    .sort((a, b) => b.createdAt - a.createdAt);
+  fs.writeFileSync(PENDING_EVIDENCE_FILE, JSON.stringify(normalized, null, 2));
+  return normalized;
+}
+
 app.get('/api/me', (req, res) => {
   const user = getUserFromReq(req);
   if (!user) return res.status(401).json({ ok: false });
@@ -110,6 +166,18 @@ app.post('/api/logout', (req, res) => {
   if (sid) sessions.delete(sid);
   clearSessionCookie(res, secure);
   return res.status(200).json({ ok: true });
+});
+
+app.get('/api/pending-evidence', requireAuth, (_req, res) => {
+  return res.status(200).json({ ok: true, items: readPendingEvidence() });
+});
+
+app.put('/api/pending-evidence', requireAuth, (req, res) => {
+  if (!Array.isArray(req.body?.items)) {
+    return res.status(400).json({ ok: false, error: 'items_must_be_array' });
+  }
+  const items = writePendingEvidence(req.body.items);
+  return res.status(200).json({ ok: true, items });
 });
 
 // Simple healthcheck for hosting platforms.
