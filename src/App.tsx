@@ -565,26 +565,15 @@ export default function App() {
           </div>
         </div>
         
-        {results.length > 0 && (
-          <div className="flex items-center gap-8 rounded-2xl border border-slate-200/80 bg-white/80 px-4 py-3 shadow-sm max-md:w-full max-md:justify-between max-sm:flex-col max-sm:items-stretch max-sm:gap-3">
-            <div className="flex flex-col items-end">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">AVANCE DE ACREDITACIÓN</span>
-              <div className="w-48 h-2.5 bg-slate-100 rounded-full mt-1.5 overflow-hidden border border-slate-200 shadow-inner">
-                <motion.div 
-                  initial={{ width: 0 }}
-                  animate={{ width: `${calculateProgress()}%` }}
-                  className="h-full bg-gradient-to-r from-rose-800 to-rose-500"
-                ></motion.div>
-              </div>
-            </div>
-            <div className="text-right border-l border-slate-100 pl-8">
-              <p className="text-xs font-bold uppercase text-slate-800">Acreditación 2024</p>
-              <p className="text-[9px] text-green-600 font-extrabold leading-none uppercase flex items-center justify-end gap-1">
-                <CheckCircle2 className="w-2.5 h-2.5" /> En Auditoría
-              </p>
-            </div>
+        <div className="flex items-center gap-3 rounded-2xl border border-slate-200/80 bg-white/80 px-4 py-3 shadow-sm max-md:w-full">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-50 text-rose-900 ring-1 ring-rose-100">
+            <Settings className="h-4 w-4" />
           </div>
-        )}
+          <div className="min-w-0">
+            <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">Sesión iniciada</p>
+            <p className="truncate text-sm font-black text-slate-900">{authedUser.split('_').join(' ')}</p>
+          </div>
+        </div>
       </header>
 
       <div className="flex flex-1 overflow-hidden max-lg:flex-col">
