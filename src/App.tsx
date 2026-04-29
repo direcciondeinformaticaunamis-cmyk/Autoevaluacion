@@ -601,6 +601,23 @@ export default function App() {
   const maxTypeDocs = Math.max(1, ...dashboardData.typeData.map((item) => item.value));
   const maxYearDocs = Math.max(1, ...dashboardData.trendData.map((item) => item.docs));
   const pendingOnlyEvidence = pendingEvidence.filter((p) => p.pending ?? true);
+  const selectedUploadOption = allIndicatorOptions.find((o) => o.indicator === selectedIndicatorForUpload);
+  const uploadPreviewNames = (() => {
+    if (!selectedUploadOption || uploadFiles.length === 0) return [];
+    const allKnownNames = [
+      ...catalog.items.map((x) => x.name),
+      ...pendingEvidence.map((p) => p.generatedName),
+    ];
+    const maxByCriterion = buildMaxAnexoByCriterion(allKnownNames);
+    return uploadFiles.map((f) => {
+      const base = f.name.replace(/\.[^.]+$/, '');
+      const ext = (f.name.match(/\.[^.]+$/)?.[0] ?? '').toLowerCase();
+      const safe = base.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+      const anexoNum = nextAnexoForCriterion(maxByCriterion, selectedUploadOption.criterionId);
+      const anexoStr = String(anexoNum).padStart(3, '0');
+      return `C${selectedUploadOption.dimensionId}_ANEXO_${anexoStr}_${selectedUploadOption.indicator}_01_${safe}${ext || ''}`;
+    });
+  })();
 
   return (
     <div className="flex flex-col h-screen w-full bg-[radial-gradient(circle_at_top_left,rgba(244,63,94,0.08),transparent_34%),linear-gradient(135deg,#fff7f8_0%,#f8fafc_42%,#eef2f7_100%)] text-slate-900 font-sans select-none overflow-hidden">
@@ -1699,11 +1716,25 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                 key="upload"
                 initial={{ opacity: 0, scale: 0.98 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="flex-1 flex flex-col max-w-4xl mx-auto w-full gap-8 py-8 overflow-y-auto min-h-0 pr-1"
+                className="flex-1 min-h-0 w-full overflow-y-auto pb-10 pr-1"
               >
-                <div className="text-center">
-                  <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tight mb-2">Codificador de Evidencias</h2>
-                  <p className="text-sm text-slate-500 font-medium italic">Seleccioná archivo, elegí el indicador, descargá la versión renombrada y pegá el link de Drive cuando lo tengas.</p>
+                <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
+                <div className="rounded-3xl border border-white bg-white/85 p-5 shadow-[0_18px_60px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 backdrop-blur-xl sm:p-6">
+                  <div className="flex items-start justify-between gap-4 max-md:flex-col">
+                    <div>
+                      <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-rose-100 bg-rose-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.24em] text-rose-800">
+                        <Download className="h-3 w-3" /> Flujo manual Drive
+                      </div>
+                      <h2 className="text-3xl font-black tracking-tight text-slate-950 max-sm:text-2xl">Codificador de Evidencias</h2>
+                      <p className="mt-2 max-w-3xl text-sm font-semibold leading-relaxed text-slate-500">
+                        Seleccioná el archivo, el asistente lo lee, elegís el indicador, la app genera el nombre oficial y descarga una copia lista para subir a Drive.
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-right shadow-sm max-md:w-full max-md:text-left">
+                      <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Estado</div>
+                      <div className="mt-1 text-sm font-black text-rose-900">{uploadFiles.length > 0 ? `${uploadFiles.length} archivo(s)` : 'Esperando archivo'}</div>
+                    </div>
+                  </div>
                   {analysisHint && results.length === 0 && (
                     <div className="mt-3 text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 inline-block">
                       Primero sube archivos y vincula evidencias para habilitar Panel, Buscador y Matriz.
@@ -1711,14 +1742,22 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                   )}
                 </div>
 
-                <div className="grid grid-cols-2 gap-8">
+                <div className="grid grid-cols-1 gap-5 xl:grid-cols-[0.9fr_1.1fr]">
                   {/* Upload Dropzone */}
-                  <div className="space-y-4">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block px-1">1. Seleccionar Archivos (PDF/DOCX/JPG)</label>
+                  <div className="space-y-4 rounded-3xl border border-white bg-white/90 p-4 shadow-[0_18px_60px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 sm:p-5">
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-rose-50 text-rose-800 ring-1 ring-rose-100">
+                        <span className="text-xs font-black">1</span>
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Seleccionar archivo</label>
+                        <p className="mt-1 text-xs font-semibold text-slate-500">Acepta PDF, imagen, DOCX u otros archivos. El nombre final se generará después de elegir indicador.</p>
+                      </div>
+                    </div>
                     <div 
                       className={cn(
-                        "h-64 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center p-8 transition-all relative overflow-hidden",
-                        uploadFiles.length > 0 ? "border-rose-400 bg-rose-50/30" : "border-slate-200 bg-slate-50/50 hover:bg-slate-100 hover:border-slate-300"
+                        "min-h-56 border-2 border-dashed rounded-3xl flex flex-col items-center justify-center p-6 transition-all relative overflow-hidden text-center sm:min-h-64",
+                        uploadFiles.length > 0 ? "border-rose-300 bg-rose-50/50" : "border-slate-200 bg-slate-50/70 hover:bg-slate-100 hover:border-slate-300"
                       )}
                     >
                       <input 
@@ -1728,27 +1767,50 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                         className="absolute inset-0 opacity-0 cursor-pointer z-10" 
                       />
                       {uploadFiles.length > 0 ? (
-                        <div className="text-center">
+                        <div>
                           <CheckCircle2 className="w-12 h-12 text-rose-700 mx-auto mb-4" />
-                          <p className="text-sm font-bold text-rose-950">{uploadFiles.length} archivos seleccionados</p>
-                          <p className="text-[10px] text-rose-800 mt-1 font-semibold uppercase tracking-wider">Haga clic para cambiar selección</p>
+                          <p className="text-sm font-black text-rose-950">{uploadFiles.length} archivo(s) seleccionado(s)</p>
+                          <div className="mt-3 max-h-24 space-y-1 overflow-y-auto rounded-2xl bg-white/80 p-3 text-left">
+                            {uploadFiles.map((file) => (
+                              <div key={`${file.name}-${file.size}`} className="truncate text-[11px] font-bold text-slate-600">{file.name}</div>
+                            ))}
+                          </div>
+                          <p className="text-[10px] text-rose-800 mt-3 font-black uppercase tracking-wider">Tocá para cambiar selección</p>
                         </div>
                       ) : (
-                        <div className="text-center">
+                        <div>
                           <Upload className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-                          <p className="text-sm font-bold text-slate-600">Arrastra archivos aquí</p>
+                          <p className="text-sm font-black text-slate-700">Arrastrá archivos aquí</p>
                           <p className="text-[10px] text-slate-400 mt-1 font-semibold uppercase tracking-wider">o haz clic para explorar</p>
                         </div>
                       )}
                     </div>
+
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                      <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Cómo funciona</div>
+                      <ol className="mt-2 space-y-2 text-xs font-semibold leading-relaxed text-slate-600">
+                        <li>1. Subís o elegís el archivo local.</li>
+                        <li>2. El asistente lee contenido y sugiere indicador.</li>
+                        <li>3. Confirmás indicador y se calcula el siguiente anexo.</li>
+                        <li>4. Descargás el archivo renombrado y luego pegás el link de Drive.</li>
+                      </ol>
+                    </div>
                   </div>
 
                   {/* Association Details */}
-                  <div className="space-y-6">
+                  <div className="space-y-4 rounded-3xl border border-white bg-white/90 p-4 shadow-[0_18px_60px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 sm:p-5">
                     <div>
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block px-1 mb-2">2. Asociar a Indicador Académico</label>
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-rose-50 text-rose-800 ring-1 ring-rose-100">
+                          <span className="text-xs font-black">2</span>
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Asociar a indicador académico</label>
+                          <p className="mt-1 text-xs font-semibold text-slate-500">Podés usar las sugerencias del asistente o seleccionar manualmente el indicador destino.</p>
+                        </div>
+                      </div>
 
-                      <div className="mb-3">
+                      <div className="mb-3 mt-4">
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block px-1 mb-2">Descripción breve (para sugerencia)</label>
                         <textarea
                           value={uploadDescription}
@@ -1759,7 +1821,7 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                       </div>
 
                       <div className="mb-3">
-                        <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-sm">
+                        <div className="bg-gradient-to-br from-rose-50/80 via-white to-slate-50 border border-rose-100 rounded-2xl p-3 shadow-sm">
                           <div className="flex items-start gap-3">
                             <div className="shrink-0 mt-0.5">
                               <div className="w-9 h-9 rounded-xl bg-rose-50 border border-rose-100 flex items-center justify-center">
@@ -1768,7 +1830,7 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                             </div>
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center justify-between gap-3">
-                                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Asistente</div>
+                                  <div className="text-[10px] font-black text-rose-800 uppercase tracking-widest">Asistente</div>
                                 <div className="flex items-center gap-2">
                                   {previewUrl && uploadFiles[0] && (
                                     <a
@@ -1782,14 +1844,14 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                                     </a>
                                   )}
                                   <div className={cn(
-                                    'text-[10px] font-black uppercase tracking-widest',
+                                    'rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-widest',
                                     pdfExtract.status === 'reading'
-                                      ? 'text-amber-700'
+                                      ? 'border-amber-200 bg-amber-50 text-amber-700'
                                       : pdfExtract.status === 'done'
-                                        ? 'text-green-700'
+                                        ? 'border-green-200 bg-green-50 text-green-700'
                                         : pdfExtract.status === 'error'
-                                          ? 'text-red-700'
-                                          : 'text-slate-400'
+                                          ? 'border-red-200 bg-red-50 text-red-700'
+                                          : 'border-slate-200 bg-white text-slate-400'
                                   )}>
                                     {pdfExtract.status === 'reading'
                                       ? 'Leyendo'
@@ -1865,7 +1927,7 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                       </div>
 
                       {suggestions.length > 0 && !selectedIndicatorForUpload && (
-                        <div className="mb-3 bg-rose-50/40 border border-rose-100 rounded-xl p-3">
+                        <div className="mb-3 bg-rose-50/60 border border-rose-100 rounded-2xl p-3">
                           <div className="text-[10px] font-black text-rose-900 uppercase tracking-widest mb-2">Sugerencias</div>
                           <div className="grid grid-cols-1 gap-2">
                             {suggestions.map((s) => (
@@ -1873,7 +1935,7 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                                 key={s.indicator}
                                 type="button"
                                 onClick={() => setSelectedIndicatorForUpload(s.indicator)}
-                                className="text-left rounded-md border border-rose-100 bg-white px-3 py-2 hover:border-rose-300 hover:bg-rose-50/30 transition-colors"
+                                  className="text-left rounded-xl border border-rose-100 bg-white px-3 py-2 hover:border-rose-300 hover:bg-rose-50/30 transition-colors"
                               >
                                  <div className="text-xs font-black text-rose-900 font-mono">[{s.indicator}] <span className="font-sans font-bold text-slate-700">{s.description}</span></div>
                                  <div className="text-[10px] text-slate-500 font-semibold">
@@ -1896,6 +1958,26 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                           <option key={o.indicator} value={o.indicator}>[{o.indicator}] {o.description.substring(0, 48)}...</option>
                         ))}
                       </select>
+
+                      {selectedUploadOption && (
+                        <div className="mt-3 rounded-2xl border border-green-100 bg-green-50/70 p-4">
+                          <div className="text-[10px] font-black uppercase tracking-widest text-green-700">Indicador seleccionado</div>
+                          <div className="mt-2 font-mono text-sm font-black text-green-900">{selectedUploadOption.indicator}</div>
+                          <p className="mt-1 text-xs font-semibold leading-relaxed text-green-800">{selectedUploadOption.description}</p>
+                          <div className="mt-2 text-[10px] font-black uppercase tracking-widest text-green-700">Criterio {selectedUploadOption.criterionId}</div>
+                        </div>
+                      )}
+
+                      {uploadPreviewNames.length > 0 && (
+                        <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                          <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Vista previa del nombre oficial</div>
+                          <div className="mt-2 max-h-32 space-y-2 overflow-y-auto">
+                            {uploadPreviewNames.map((name) => (
+                              <div key={name} className="rounded-xl bg-white px-3 py-2 font-mono text-[11px] font-bold text-slate-700 ring-1 ring-slate-200 break-all">{name}</div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
 
                       <div className="mt-3">
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block px-1 mb-2">Hipervínculo de Drive (opcional)</label>
@@ -1957,7 +2039,7 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                       </div>
                     )}
 
-                    <div className="bg-slate-900 rounded-2xl p-6 text-white shadow-xl shadow-slate-200 relative overflow-hidden">
+                    <div className="bg-slate-900 rounded-3xl p-5 text-white shadow-xl shadow-slate-200 relative overflow-hidden sm:p-6">
                       <div className="absolute top-0 right-0 p-2 opacity-10"><Database className="w-12 h-12 text-rose-300" /></div>
                       <h4 className="text-[10px] font-black text-rose-300 uppercase tracking-[0.2em] mb-4">Información de Sistema</h4>
                       <div className="space-y-3 text-[11px] font-medium leading-relaxed opacity-90">
@@ -1967,7 +2049,7 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                       <button 
                         onClick={executeUpload}
                         disabled={uploadFiles.length === 0 || !selectedIndicatorForUpload || isUploading}
-                        className="w-full mt-8 bg-rose-800 hover:bg-rose-700 disabled:bg-slate-700 text-white font-black uppercase text-[10px] tracking-widest py-3 rounded-lg transition-all flex items-center justify-center gap-2"
+                        className="w-full mt-6 bg-rose-800 hover:bg-rose-700 disabled:bg-slate-700 text-white font-black uppercase text-[10px] tracking-widest py-3 rounded-2xl transition-all flex items-center justify-center gap-2"
                       >
                         {isUploading ? (
                           <> <Loader2 className="w-4 h-4 animate-spin" /> Codificando... </>
@@ -1977,6 +2059,7 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                       </button>
                     </div>
                   </div>
+                </div>
                 </div>
               </motion.div>
             )}
