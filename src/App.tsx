@@ -46,7 +46,7 @@ import {
 import { buildMaxAnexoByCriterion, nextAnexoForCriterion } from './services/anexoSequencer';
 import { extractPdfText, ocrImageText, ocrPdfText } from './services/pdfText';
 import { cn } from './lib/utils';
-import unamisLogo from './img/LOGO UNAMIS WEB 2 (3).png';
+import unamisLogo from './img/logounamis.png';
 import Login from './components/Login';
 
 export default function App() {
