@@ -336,6 +336,7 @@ export default function App() {
     dimensionId: p.dimensionId,
     year: p.year,
     pending: p.pending ?? true,
+    pendingId: p.id,
   }));
 
   const catalog = buildCatalogIndex(pendingCatalogItems);
@@ -523,6 +524,58 @@ export default function App() {
     } finally {
       setIsUploading(false);
     }
+  };
+
+  const codifyAnalyzedFilesForIndicator = (indicator: IndicatorAnalysis) => {
+    if (localAnalysisFiles.length === 0) {
+      alert('Primero seleccioná y analizá un archivo local en la Central de Carga.');
+      return;
+    }
+
+    const opt = allIndicatorOptions.find((o) => o.indicator.toLowerCase() === indicator.indicator.toLowerCase());
+    if (!opt) {
+      alert('No se encontró el indicador en la matriz oficial.');
+      return;
+    }
+
+    const nowYear = new Date().getFullYear().toString();
+    const allKnownNames = [
+      ...catalog.items.map((x) => x.name),
+      ...pendingEvidence.map((p) => p.generatedName),
+    ];
+    const maxByCriterion = buildMaxAnexoByCriterion(allKnownNames);
+
+    let next = pendingEvidence;
+    for (const f of localAnalysisFiles) {
+      const base = f.name.replace(/\.[^.]+$/, '');
+      const ext = (f.name.match(/\.[^.]+$/)?.[0] ?? '').toLowerCase();
+      const safe = base.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+      const anexoNum = nextAnexoForCriterion(maxByCriterion, opt.criterionId);
+      const anexoStr = String(anexoNum).padStart(3, '0');
+      const generatedName = `C${opt.dimensionId}_ANEXO_${anexoStr}_${opt.indicator}_01_${safe}${ext || ''}`;
+
+      const objectUrl = URL.createObjectURL(f);
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = generatedName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(objectUrl);
+
+      next = addPendingEvidence(next, {
+        originalName: f.name,
+        generatedName,
+        indicatorId: opt.indicator.toLowerCase(),
+        dimensionId: opt.dimensionId,
+        year: nowYear,
+        link: '',
+        pending: true,
+      });
+    }
+
+    setPendingEvidence(next);
+    setActiveTab('catalog');
   };
 
   const getDashboardData = () => {
@@ -730,26 +783,15 @@ export default function App() {
                 <ListTodo className="w-3.5 h-3.5" />
                 Matriz
               </button>
-              <button 
+              <button
                 onClick={() => setActiveTab('catalog')}
                 className={cn(
-                  "flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border",
+                  "col-span-2 flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border max-lg:col-span-1 max-sm:col-span-2",
                   activeTab === 'catalog' ? "bg-rose-900 text-white border-rose-950 shadow-lg shadow-rose-900/20" : "bg-white/90 text-slate-600 border-slate-200 hover:bg-rose-50 hover:text-rose-900 hover:border-rose-200"
                 )}
               >
                 <BookOpen className="w-3.5 h-3.5" />
                 Catálogo
-              </button>
-              <button
-                onClick={() => setActiveTab('upload')}
-                className={cn(
-                  "flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border",
-                  activeTab === 'upload' ? "bg-rose-900 text-white border-rose-950 shadow-lg shadow-rose-900/20" : "bg-white/90 text-slate-600 border-slate-200 hover:bg-rose-50 hover:text-rose-900 hover:border-rose-200"
-                )}
-                title="Codificar archivo, descargarlo y registrar link de Drive"
-              >
-                <Upload className="w-3.5 h-3.5" />
-                Codificar
               </button>
             </div>
             <div className="relative">
@@ -1638,6 +1680,23 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                                                   return it.pending ? (
                                                     <div key={it.name} className="group flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50/40 px-3 py-3 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
                                                       {content}
+                                                      {it.pendingId && (
+                                                        <button
+                                                          type="button"
+                                                          onClick={() => {
+                                                            const link = window.prompt('Pegá el hipervínculo de Drive para este anexo:')?.trim();
+                                                            if (!link) return;
+                                                            setPendingEvidence((prev) => {
+                                                              const updated = prev.map((item) => item.id === it.pendingId ? { ...item, link, pending: false } : item);
+                                                              savePendingEvidence(updated);
+                                                              return updated;
+                                                            });
+                                                          }}
+                                                          className="shrink-0 rounded-xl bg-rose-900 px-3 py-2 text-[9px] font-black uppercase tracking-widest text-white transition-colors hover:bg-rose-800"
+                                                        >
+                                                          Guardar link
+                                                        </button>
+                                                      )}
                                                     </div>
                                                   ) : (
                                                     <a
@@ -2094,7 +2153,7 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                 className="flex-1 flex flex-col gap-4 overflow-hidden"
               >
                 {/* Active Indicator Header */}
-                <section className="bg-white/90 p-5 border border-white rounded-3xl shadow-[0_18px_60px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 shrink-0 flex justify-between items-start relative overflow-hidden">
+                <section className="bg-white/90 p-5 border border-white rounded-3xl shadow-[0_18px_60px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 shrink-0 flex justify-between items-start gap-4 relative overflow-hidden max-lg:flex-col">
                   <div className="absolute top-0 left-0 w-1.5 h-full bg-gradient-to-b from-rose-900 to-rose-500"></div>
                   <div>
                     <div className="flex items-center gap-3 mb-1">
@@ -2108,8 +2167,24 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                     </div>
                     <p className="text-[11px] text-slate-500 max-w-4xl leading-relaxed font-medium">{selectedIndicator.description}</p>
                   </div>
-                  <button className="px-5 py-2.5 bg-rose-950 hover:bg-rose-900 text-white text-[10px] font-black uppercase tracking-widest rounded-2xl transition-all shadow-lg shadow-rose-900/20">Exportar Reporte</button>
+                  <div className="flex shrink-0 flex-wrap gap-2 max-lg:w-full">
+                    {localAnalysisFiles.length > 0 && (
+                      <button
+                        onClick={() => codifyAnalyzedFilesForIndicator(selectedIndicator)}
+                        className="px-5 py-2.5 bg-rose-950 hover:bg-rose-900 text-white text-[10px] font-black uppercase tracking-widest rounded-2xl transition-all shadow-lg shadow-rose-900/20 max-lg:flex-1"
+                      >
+                        Descargar codificado
+                      </button>
+                    )}
+                    <button className="px-5 py-2.5 bg-slate-900 hover:bg-black text-white text-[10px] font-black uppercase tracking-widest rounded-2xl transition-all shadow-lg shadow-slate-900/10 max-lg:flex-1">Exportar Reporte</button>
+                  </div>
                 </section>
+
+                {localAnalysisFiles.length > 0 && (
+                  <div className="rounded-3xl border border-amber-100 bg-amber-50/80 px-5 py-4 text-xs font-semibold leading-relaxed text-amber-900 shadow-sm">
+                    Si este indicador corresponde al archivo analizado, usá <strong>Descargar codificado</strong>. La app generará el nombre oficial, descargará el archivo y lo agregará al Catálogo como pendiente para que luego pegues el hipervínculo de Drive.
+                  </div>
+                )}
 
                 <div className="grid grid-cols-12 gap-4 flex-1 overflow-hidden">
                   {/* Left Column: Documents & Gaps */}

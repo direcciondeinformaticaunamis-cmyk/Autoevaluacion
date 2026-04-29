@@ -7,6 +7,7 @@ export type CatalogItem = {
   dimensionId: string | null;
   year: string | null;
   pending?: boolean;
+  pendingId?: string;
 };
 
 function inferYear(name: string): string | null {
