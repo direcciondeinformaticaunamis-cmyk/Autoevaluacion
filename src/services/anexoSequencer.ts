@@ -6,8 +6,8 @@ type Parsed = {
 };
 
 function parseName(name: string): Parsed {
-  const dim = name.match(/\bC([123])_ANEXO_/i);
-  const anexo = name.match(/\bANEXO_(\d{1,6})\b/i);
+  const dim = name.match(/\bC\s*([123])\s*_?\s*ANEXO\b/i);
+  const anexo = name.match(/\bANEXO\s*_?\s*(\d{1,6})\b/i);
   const indicator = name.match(/(\d+\.\d+\.[a-z])/i);
   const indicatorId = indicator ? indicator[1].toLowerCase() : null;
   const criterionId = indicatorId ? indicatorId.split('.').slice(0, 2).join('.') : null;
@@ -35,5 +35,23 @@ export function nextAnexoForCriterion(maxBy: Map<string, number>, criterionId: s
   const prev = maxBy.get(criterionId) ?? 0;
   const next = prev + 1;
   maxBy.set(criterionId, next);
+  return next;
+}
+
+export function buildMaxAnexoByDimension(names: string[]): Map<string, number> {
+  const maxBy = new Map<string, number>();
+  for (const n of names) {
+    const p = parseName(n);
+    if (!p.dimensionId || !p.anexoNum || Number.isNaN(p.anexoNum)) continue;
+    const prev = maxBy.get(p.dimensionId) ?? 0;
+    if (p.anexoNum > prev) maxBy.set(p.dimensionId, p.anexoNum);
+  }
+  return maxBy;
+}
+
+export function nextAnexoForDimension(maxBy: Map<string, number>, dimensionId: string): number {
+  const prev = maxBy.get(dimensionId) ?? 0;
+  const next = prev + 1;
+  maxBy.set(dimensionId, next);
   return next;
 }

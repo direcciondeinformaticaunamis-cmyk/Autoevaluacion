@@ -48,7 +48,7 @@ import {
   savePendingEvidence,
   syncPendingEvidence,
 } from './services/pendingEvidenceStore';
-import { buildMaxAnexoByCriterion, nextAnexoForCriterion } from './services/anexoSequencer';
+import { buildMaxAnexoByDimension, nextAnexoForDimension } from './services/anexoSequencer';
 import { extractPdfText, ocrImageText, ocrPdfText } from './services/pdfText';
 import { cn } from './lib/utils';
 import unamisLogo from './img/logounamis.png';
@@ -509,7 +509,7 @@ export default function App() {
         ...catalog.items.map((x) => x.name),
         ...currentPendingEvidence.map((p) => p.generatedName),
       ];
-      const maxByCriterion = buildMaxAnexoByCriterion(allKnownNames);
+      const maxByDimension = buildMaxAnexoByDimension(allKnownNames);
 
       let next = currentPendingEvidence;
       const createdEvidence: PendingEvidence[] = [];
@@ -519,8 +519,8 @@ export default function App() {
         const ext = (f.name.match(/\.[^.]+$/)?.[0] ?? '').toLowerCase();
         const safe = base.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
 
-        // Consecutive ANEXO number is per criterio folder (e.g. 2.1, 3.2, ...).
-        const anexoNum = nextAnexoForCriterion(maxByCriterion, opt.criterionId);
+        // Consecutive ANEXO number is shared by the full dimension, not by indicator/criterion.
+        const anexoNum = nextAnexoForDimension(maxByDimension, opt.dimensionId);
         const anexoStr = String(anexoNum).padStart(3, '0');
         const generatedName = `C${opt.dimensionId}_ANEXO_${anexoStr}_${opt.indicator}_01_${safe}${ext || ''}`;
         const objectUrl = URL.createObjectURL(f);
@@ -597,7 +597,7 @@ export default function App() {
         ...catalog.items.map((x) => x.name),
         ...currentPendingEvidence.map((p) => p.generatedName),
       ];
-      const maxByCriterion = buildMaxAnexoByCriterion(allKnownNames);
+      const maxByDimension = buildMaxAnexoByDimension(allKnownNames);
 
       let next = currentPendingEvidence;
       const createdEvidence: PendingEvidence[] = [];
@@ -605,7 +605,7 @@ export default function App() {
         const base = f.name.replace(/\.[^.]+$/, '');
         const ext = (f.name.match(/\.[^.]+$/)?.[0] ?? '').toLowerCase();
         const safe = base.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
-        const anexoNum = nextAnexoForCriterion(maxByCriterion, opt.criterionId);
+        const anexoNum = nextAnexoForDimension(maxByDimension, opt.dimensionId);
         const anexoStr = String(anexoNum).padStart(3, '0');
         const generatedName = `C${opt.dimensionId}_ANEXO_${anexoStr}_${opt.indicator}_01_${safe}${ext || ''}`;
 
@@ -757,12 +757,12 @@ export default function App() {
       ...catalog.items.map((x) => x.name),
       ...pendingEvidence.map((p) => p.generatedName),
     ];
-    const maxByCriterion = buildMaxAnexoByCriterion(allKnownNames);
+    const maxByDimension = buildMaxAnexoByDimension(allKnownNames);
     return uploadFiles.map((f) => {
       const base = f.name.replace(/\.[^.]+$/, '');
       const ext = (f.name.match(/\.[^.]+$/)?.[0] ?? '').toLowerCase();
       const safe = base.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
-      const anexoNum = nextAnexoForCriterion(maxByCriterion, selectedUploadOption.criterionId);
+      const anexoNum = nextAnexoForDimension(maxByDimension, selectedUploadOption.dimensionId);
       const anexoStr = String(anexoNum).padStart(3, '0');
       return `C${selectedUploadOption.dimensionId}_ANEXO_${anexoStr}_${selectedUploadOption.indicator}_01_${safe}${ext || ''}`;
     });
@@ -2220,7 +2220,7 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                       <div className="absolute top-0 right-0 p-2 opacity-10"><Database className="w-12 h-12 text-rose-300" /></div>
                       <h4 className="text-[10px] font-black text-rose-300 uppercase tracking-[0.2em] mb-4">Información de Sistema</h4>
                       <div className="space-y-3 text-[11px] font-medium leading-relaxed opacity-90">
-                        <p>• La app calcula el siguiente número de anexo del criterio seleccionado.</p>
+                        <p>• La app calcula el siguiente número de anexo de toda la dimensión seleccionada.</p>
                         <p>• El botón descarga el archivo renombrado y registra el anexo en el catálogo.</p>
                         <p>• Si pegaste link, entra con vínculo. Si no, queda pendiente para cargarlo después.</p>
                       </div>
