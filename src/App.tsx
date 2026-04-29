@@ -39,16 +39,18 @@ import { OFFICIAL_MATRIX } from './constants/matrix';
 import { buildCatalogIndex } from './services/catalogIndex';
 import type { CatalogItem } from './services/catalogIndex';
 import {
-  addPendingEvidence,
+  EvidenceHistoryItem,
+  fetchEvidenceHistory,
   fetchPendingEvidence,
   loadPendingEvidence,
   mergePendingEvidence,
   PendingEvidence,
+  previewCodifiedNames,
+  reserveCodifiedEvidence,
   removePendingEvidence,
   savePendingEvidence,
   syncPendingEvidence,
 } from './services/pendingEvidenceStore';
-import { buildMaxAnexoByDimension, nextAnexoForDimension } from './services/anexoSequencer';
 import { extractPdfText, ocrImageText, ocrPdfText } from './services/pdfText';
 import { cn } from './lib/utils';
 import unamisLogo from './img/logounamis.png';
@@ -61,7 +63,7 @@ export default function App() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [results, setResults] = useState<IndicatorAnalysis[]>([]);
   const [selectedIndicator, setSelectedIndicator] = useState<IndicatorAnalysis | null>(null);
-  const [activeTab, setActiveTab] = useState<'input' | 'dashboard' | 'matrix' | 'catalog' | 'results' | 'search' | 'upload'>('input');
+  const [activeTab, setActiveTab] = useState<'input' | 'dashboard' | 'matrix' | 'catalog' | 'results' | 'search' | 'upload' | 'admin'>('input');
   const [searchTerm, setSearchTerm] = useState('');
   const [analysisHint, setAnalysisHint] = useState(false);
 
@@ -111,6 +113,16 @@ export default function App() {
   const [codifiedEvidenceLinks, setCodifiedEvidenceLinks] = useState<Record<string, string>>({});
   const [savingEvidenceLinkId, setSavingEvidenceLinkId] = useState('');
   const [isCodifyingAnalyzedFiles, setIsCodifyingAnalyzedFiles] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'error' | 'local'>('syncing');
+  const [evidenceHistory, setEvidenceHistory] = useState<EvidenceHistoryItem[]>([]);
+  const [codifyModal, setCodifyModal] = useState<{
+    open: boolean;
+    status: 'preview' | 'downloading' | 'ready';
+    indicator?: IndicatorAnalysis;
+    files: File[];
+    previewNames: string[];
+    created: PendingEvidence[];
+  }>({ open: false, status: 'preview', files: [], previewNames: [], created: [] });
 
   useEffect(() => {
     fetch('/api/me', { credentials: 'include' })
@@ -126,18 +138,26 @@ export default function App() {
 
   useEffect(() => {
     if (!authedUser) return;
+    setSyncStatus('syncing');
     fetchPendingEvidence()
       .then(async (remoteItems) => {
         const merged = mergePendingEvidence(loadPendingEvidence(), remoteItems);
         savePendingEvidence(merged);
         setPendingEvidence(merged);
         if (merged.length !== remoteItems.length) await syncPendingEvidence(merged);
+        setSyncStatus('synced');
       })
       .catch(() => {
         // Keep the local cache usable if the server database is temporarily unavailable.
         setPendingEvidence(loadPendingEvidence());
+        setSyncStatus('local');
       });
   }, [authedUser]);
+
+  useEffect(() => {
+    if (!authedUser || !['direccion', 'director_informatica'].includes(authedUser)) return;
+    fetchEvidenceHistory().then(setEvidenceHistory).catch(() => setEvidenceHistory([]));
+  }, [authedUser, pendingEvidence]);
 
   // Gate the whole app behind a simple login.
   if (!authChecked) return null;
@@ -277,20 +297,20 @@ export default function App() {
       const docs = localAnalysisDocs;
 
       // Assign each doc to best indicator by content.
-      const byIndicator = new Map<string, { name: string; year: string; score: number }[]>();
+      const byIndicator = new Map<string, { name: string; year: string; score: number; matched: string[] }[]>();
       for (const d of docs) {
         const textLower = d.text.toLowerCase();
-        let best: { id: string; score: number } | null = null;
+        let best: { id: string; score: number; matched: string[] } | null = null;
 
         for (const opt of allIndicatorOptions) {
-          const s = scoreIndicatorForText(opt, textLower).score;
-          if (s <= 0) continue;
-          if (!best || s > best.score) best = { id: opt.indicator.toLowerCase(), score: s };
+          const s = scoreIndicatorForText(opt, textLower);
+          if (s.score <= 0) continue;
+          if (!best || s.score > best.score) best = { id: opt.indicator.toLowerCase(), score: s.score, matched: s.matched };
         }
 
         if (!best) continue;
         const arr = byIndicator.get(best.id) ?? [];
-        arr.push({ name: d.file.name, year: inferYearFromName(d.file.name), score: best.score });
+        arr.push({ name: d.file.name, year: inferYearFromName(d.file.name), score: best.score, matched: best.matched });
         byIndicator.set(best.id, arr);
       }
 
@@ -315,6 +335,8 @@ export default function App() {
             focus: 'medio',
             status: 'vigente',
             link: '',
+            score: d.score,
+            matched: d.matched,
           })),
           technicalAnalysis: {
             complianceLevel,
@@ -480,16 +502,35 @@ export default function App() {
   };
 
   const refreshPendingEvidenceBeforeCodifying = async () => {
+    setSyncStatus('syncing');
     try {
       const remoteItems = await fetchPendingEvidence();
       const merged = mergePendingEvidence(loadPendingEvidence(), remoteItems);
       savePendingEvidence(merged);
       setPendingEvidence(merged);
       if (merged.length !== remoteItems.length) await syncPendingEvidence(merged);
+      setSyncStatus('synced');
       return merged;
     } catch {
+      setSyncStatus('local');
       return loadPendingEvidence();
     }
+  };
+
+  const getKnownCatalogNames = (items: PendingEvidence[]) => [
+    ...catalog.items.map((x) => x.name),
+    ...items.map((p) => p.generatedName),
+  ];
+
+  const downloadFileAs = (file: File, generatedName: string) => {
+    const objectUrl = URL.createObjectURL(file);
+    const a = document.createElement('a');
+    a.href = objectUrl;
+    a.download = generatedName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(objectUrl);
   };
 
   const executeUpload = async () => {
@@ -505,45 +546,21 @@ export default function App() {
         .split(/\r?\n/g)
         .map((x) => x.trim())
         .filter(Boolean);
-      const allKnownNames = [
-        ...catalog.items.map((x) => x.name),
-        ...currentPendingEvidence.map((p) => p.generatedName),
-      ];
-      const maxByDimension = buildMaxAnexoByDimension(allKnownNames);
-
       let next = currentPendingEvidence;
       const createdEvidence: PendingEvidence[] = [];
       for (let idx = 0; idx < uploadFiles.length; idx += 1) {
         const f = uploadFiles[idx]!;
-        const base = f.name.replace(/\.[^.]+$/, '');
-        const ext = (f.name.match(/\.[^.]+$/)?.[0] ?? '').toLowerCase();
-        const safe = base.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
-
-        // Consecutive ANEXO number is shared by the full dimension, not by indicator/criterion.
-        const anexoNum = nextAnexoForDimension(maxByDimension, opt.dimensionId);
-        const anexoStr = String(anexoNum).padStart(3, '0');
-        const generatedName = `C${opt.dimensionId}_ANEXO_${anexoStr}_${opt.indicator}_01_${safe}${ext || ''}`;
-        const objectUrl = URL.createObjectURL(f);
-        const a = document.createElement('a');
-        a.href = objectUrl;
-        a.download = generatedName;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(objectUrl);
-
         const link = driveLinks[idx] || (uploadFiles.length === 1 ? driveLinks[0] : '') || '';
-
-        next = addPendingEvidence(next, {
+        const reserved = await reserveCodifiedEvidence({
           originalName: f.name,
-          generatedName,
           indicatorId: opt.indicator.toLowerCase(),
           dimensionId: opt.dimensionId,
           year: nowYear,
-          link,
-          pending: !link,
+          knownNames: getKnownCatalogNames(next),
         });
-        createdEvidence.push(next[0]!);
+        downloadFileAs(f, reserved.item.generatedName);
+        next = link ? reserved.items.map((item) => item.id === reserved.item.id ? { ...item, link, pending: false } : item) : reserved.items;
+        createdEvidence.push(link ? { ...reserved.item, link, pending: false } : reserved.item);
       }
 
       setPendingEvidence(next);
@@ -554,8 +571,11 @@ export default function App() {
         return nextLinks;
       });
       try {
+        setSyncStatus('syncing');
         await syncPendingEvidence(next);
+        setSyncStatus('synced');
       } catch {
+        setSyncStatus('error');
         alert('Los archivos se descargaron y quedaron guardados localmente, pero no se pudieron sincronizar con la base de datos del servidor.');
       }
       setUploadFiles([]);
@@ -592,56 +612,15 @@ export default function App() {
     setIsCodifyingAnalyzedFiles(true);
     try {
       const currentPendingEvidence = await refreshPendingEvidenceBeforeCodifying();
-      const nowYear = new Date().getFullYear().toString();
-      const allKnownNames = [
-        ...catalog.items.map((x) => x.name),
-        ...currentPendingEvidence.map((p) => p.generatedName),
-      ];
-      const maxByDimension = buildMaxAnexoByDimension(allKnownNames);
-
-      let next = currentPendingEvidence;
-      const createdEvidence: PendingEvidence[] = [];
-      for (const f of localAnalysisFiles) {
-        const base = f.name.replace(/\.[^.]+$/, '');
-        const ext = (f.name.match(/\.[^.]+$/)?.[0] ?? '').toLowerCase();
-        const safe = base.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
-        const anexoNum = nextAnexoForDimension(maxByDimension, opt.dimensionId);
-        const anexoStr = String(anexoNum).padStart(3, '0');
-        const generatedName = `C${opt.dimensionId}_ANEXO_${anexoStr}_${opt.indicator}_01_${safe}${ext || ''}`;
-
-        const objectUrl = URL.createObjectURL(f);
-        const a = document.createElement('a');
-        a.href = objectUrl;
-        a.download = generatedName;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(objectUrl);
-
-        next = addPendingEvidence(next, {
+      const previewNames = await previewCodifiedNames(
+        localAnalysisFiles.map((f) => ({
           originalName: f.name,
-          generatedName,
           indicatorId: opt.indicator.toLowerCase(),
           dimensionId: opt.dimensionId,
-          year: nowYear,
-          link: '',
-          pending: true,
-        });
-        createdEvidence.push(next[0]!);
-      }
-
-      setPendingEvidence(next);
-      setRecentlyCodifiedEvidence(createdEvidence);
-      setCodifiedEvidenceLinks((prev) => {
-        const nextLinks = { ...prev };
-        for (const item of createdEvidence) nextLinks[item.id] = '';
-        return nextLinks;
-      });
-      try {
-        await syncPendingEvidence(next);
-      } catch {
-        alert('El archivo se descargó y quedó guardado localmente, pero no se pudo sincronizar con la base de datos del servidor.');
-      }
+        })),
+        getKnownCatalogNames(currentPendingEvidence)
+      );
+      setCodifyModal({ open: true, status: 'preview', indicator, files: localAnalysisFiles, previewNames, created: [] });
     } finally {
       setIsCodifyingAnalyzedFiles(false);
     }
@@ -703,18 +682,62 @@ export default function App() {
     setPendingEvidence(updated);
     setSavingEvidenceLinkId(evidenceId);
     try {
+      setSyncStatus('syncing');
       await syncPendingEvidence(updated);
+      setSyncStatus('synced');
       setRecentlyCodifiedEvidence((prev) => prev.filter((item) => item.id !== evidenceId));
+      setCodifyModal((prev) => ({ ...prev, created: prev.created.filter((item) => item.id !== evidenceId) }));
       setCodifiedEvidenceLinks((prev) => {
         const next = { ...prev };
         delete next[evidenceId];
         return next;
       });
+      setCodifyModal((prev) => prev.created.length === 0 ? { open: false, status: 'preview', files: [], previewNames: [], created: [] } : prev);
       setActiveTab('catalog');
     } catch {
+      setSyncStatus('error');
       alert('El link quedó guardado localmente, pero no se pudo sincronizar con el servidor.');
     } finally {
       setSavingEvidenceLinkId('');
+    }
+  };
+
+  const confirmCodifiedDownload = async () => {
+    const indicator = codifyModal.indicator;
+    if (!indicator || codifyModal.files.length === 0) return;
+    const opt = allIndicatorOptions.find((o) => o.indicator.toLowerCase() === indicator.indicator.toLowerCase());
+    if (!opt) return;
+
+    setCodifyModal((prev) => ({ ...prev, status: 'downloading' }));
+    setSyncStatus('syncing');
+    try {
+      let currentPendingEvidence = await refreshPendingEvidenceBeforeCodifying();
+      const created: PendingEvidence[] = [];
+      for (const file of codifyModal.files) {
+        const reserved = await reserveCodifiedEvidence({
+          originalName: file.name,
+          indicatorId: opt.indicator.toLowerCase(),
+          dimensionId: opt.dimensionId,
+          year: new Date().getFullYear().toString(),
+          knownNames: getKnownCatalogNames(currentPendingEvidence),
+        });
+        currentPendingEvidence = reserved.items;
+        created.push(reserved.item);
+        downloadFileAs(file, reserved.item.generatedName);
+      }
+      setPendingEvidence(currentPendingEvidence);
+      setRecentlyCodifiedEvidence(created);
+      setCodifiedEvidenceLinks((prev) => {
+        const next = { ...prev };
+        for (const item of created) next[item.id] = '';
+        return next;
+      });
+      setCodifyModal((prev) => ({ ...prev, status: 'ready', created }));
+      setSyncStatus('synced');
+    } catch (err: any) {
+      setSyncStatus('error');
+      alert(`No se pudo reservar/descargar el anexo: ${String(err?.message || err)}`);
+      setCodifyModal((prev) => ({ ...prev, status: 'preview' }));
     }
   };
 
@@ -750,23 +773,9 @@ export default function App() {
   const currentCodifiedEvidence = selectedIndicator
     ? recentlyCodifiedEvidence.filter((p) => (p.pending ?? true) && p.indicatorId === selectedIndicator.indicator.toLowerCase())
     : [];
+  const canAdminCatalog = ['direccion', 'director_informatica'].includes(authedUser);
   const selectedUploadOption = allIndicatorOptions.find((o) => o.indicator === selectedIndicatorForUpload);
-  const uploadPreviewNames = (() => {
-    if (!selectedUploadOption || uploadFiles.length === 0) return [];
-    const allKnownNames = [
-      ...catalog.items.map((x) => x.name),
-      ...pendingEvidence.map((p) => p.generatedName),
-    ];
-    const maxByDimension = buildMaxAnexoByDimension(allKnownNames);
-    return uploadFiles.map((f) => {
-      const base = f.name.replace(/\.[^.]+$/, '');
-      const ext = (f.name.match(/\.[^.]+$/)?.[0] ?? '').toLowerCase();
-      const safe = base.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
-      const anexoNum = nextAnexoForDimension(maxByDimension, selectedUploadOption.dimensionId);
-      const anexoStr = String(anexoNum).padStart(3, '0');
-      return `C${selectedUploadOption.dimensionId}_ANEXO_${anexoStr}_${selectedUploadOption.indicator}_01_${safe}${ext || ''}`;
-    });
-  })();
+  const uploadPreviewNames: string[] = [];
 
   return (
     <div className="flex flex-col h-screen w-full bg-[radial-gradient(circle_at_top_left,rgba(244,63,94,0.08),transparent_34%),linear-gradient(135deg,#fff7f8_0%,#f8fafc_42%,#eef2f7_100%)] text-slate-900 font-sans select-none overflow-hidden">
@@ -882,13 +891,25 @@ export default function App() {
               <button
                 onClick={() => setActiveTab('catalog')}
                 className={cn(
-                  "col-span-2 flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border max-lg:col-span-1 max-sm:col-span-2",
+                  "flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border",
                   activeTab === 'catalog' ? "bg-rose-900 text-white border-rose-950 shadow-lg shadow-rose-900/20" : "bg-white/90 text-slate-600 border-slate-200 hover:bg-rose-50 hover:text-rose-900 hover:border-rose-200"
                 )}
               >
                 <BookOpen className="w-3.5 h-3.5" />
                 Catálogo
               </button>
+              {canAdminCatalog && (
+                <button
+                  onClick={() => setActiveTab('admin')}
+                  className={cn(
+                    "col-span-2 flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border max-lg:col-span-1 max-sm:col-span-2",
+                    activeTab === 'admin' ? "bg-rose-900 text-white border-rose-950 shadow-lg shadow-rose-900/20" : "bg-white/90 text-slate-600 border-slate-200 hover:bg-rose-50 hover:text-rose-900 hover:border-rose-200"
+                  )}
+                >
+                  <Database className="w-3.5 h-3.5" />
+                  Admin
+                </button>
+              )}
             </div>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
@@ -1865,6 +1886,98 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
               </motion.div>
             )}
 
+            {activeTab === 'admin' && canAdminCatalog && (
+              <motion.div
+                key="admin"
+                initial={{ opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="flex-1 min-h-0 w-full overflow-y-auto pb-10 pr-1"
+              >
+                <div className="mx-auto flex w-full max-w-7xl flex-col gap-5">
+                  <section className="rounded-3xl border border-white bg-white/90 p-6 shadow-[0_18px_60px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70">
+                    <div className="flex items-start justify-between gap-4 max-md:flex-col">
+                      <div>
+                        <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-rose-100 bg-rose-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.24em] text-rose-800">
+                          <Database className="h-3 w-3" /> Administración
+                        </div>
+                        <h2 className="text-3xl font-black tracking-tight text-slate-950 max-md:text-2xl">Administrar Anexos</h2>
+                        <p className="mt-2 text-sm font-semibold text-slate-500">Editá links, quitá registros incorrectos y revisá auditoría sin tocar archivos del servidor.</p>
+                      </div>
+                      <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-right">
+                        <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Registros nuevos</div>
+                        <div className="text-2xl font-black text-rose-900">{pendingEvidence.length}</div>
+                      </div>
+                    </div>
+
+                    <div className="mt-6 grid gap-4 lg:grid-cols-[1.3fr_0.7fr]">
+                      <div className="rounded-3xl border border-slate-200 bg-white p-4">
+                        <h3 className="mb-3 text-[10px] font-black uppercase tracking-[0.24em] text-slate-500">Anexos editables</h3>
+                        <div className="max-h-[520px] space-y-2 overflow-y-auto pr-1">
+                          {pendingEvidence.length === 0 ? (
+                            <div className="rounded-2xl border border-dashed border-slate-200 p-8 text-center text-xs font-bold text-slate-400">Sin anexos agregados desde la app.</div>
+                          ) : pendingEvidence.map((item) => (
+                            <div key={item.id} className="rounded-2xl border border-slate-200 bg-slate-50/60 p-3">
+                              <div className="mb-2 flex items-center justify-between gap-3">
+                                <div className="min-w-0">
+                                  <div className="truncate font-mono text-[11px] font-black text-slate-900" title={item.generatedName}>{item.generatedName}</div>
+                                  <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Indicador {item.indicatorId} · Dimensión {item.dimensionId}</div>
+                                </div>
+                                <span className={cn("shrink-0 rounded-full px-2 py-1 text-[9px] font-black uppercase", item.pending ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700')}>{item.pending ? 'Pendiente' : 'Con link'}</span>
+                              </div>
+                              <div className="flex gap-2 max-md:flex-col">
+                                <input
+                                  defaultValue={item.link || ''}
+                                  placeholder="https://drive.google.com/..."
+                                  onBlur={(event) => {
+                                    const link = event.target.value.trim();
+                                    if (link === (item.link || '')) return;
+                                    const updated = pendingEvidence.map((p) => p.id === item.id ? { ...p, link, pending: !link } : p);
+                                    savePendingEvidence(updated);
+                                    setPendingEvidence(updated);
+                                    setSyncStatus('syncing');
+                                    syncPendingEvidence(updated).then((saved) => { setPendingEvidence(saved); setSyncStatus('synced'); }).catch(() => setSyncStatus('error'));
+                                  }}
+                                  className="h-10 min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold outline-none focus:border-rose-300 focus:ring-2 focus:ring-rose-100"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (!window.confirm('¿Quitar este anexo del catálogo editable?')) return;
+                                    const updated = removePendingEvidence(pendingEvidence, item.id);
+                                    setPendingEvidence(updated);
+                                    setSyncStatus('syncing');
+                                    syncPendingEvidence(updated).then((saved) => { setPendingEvidence(saved); setSyncStatus('synced'); }).catch(() => setSyncStatus('error'));
+                                  }}
+                                  className="rounded-xl border border-rose-200 bg-white px-3 text-[10px] font-black uppercase tracking-widest text-rose-800 hover:bg-rose-50"
+                                >
+                                  Quitar
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="rounded-3xl border border-slate-200 bg-slate-950 p-4 text-white">
+                        <h3 className="mb-3 text-[10px] font-black uppercase tracking-[0.24em] text-rose-300">Historial</h3>
+                        <div className="max-h-[520px] space-y-2 overflow-y-auto pr-1">
+                          {evidenceHistory.length === 0 ? (
+                            <div className="rounded-2xl border border-white/10 p-6 text-center text-xs font-bold text-slate-400">Sin eventos registrados.</div>
+                          ) : evidenceHistory.slice(0, 80).map((event) => (
+                            <div key={event.id} className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                              <div className="text-[10px] font-black uppercase tracking-widest text-rose-200">{event.action.replace(/_/g, ' ')}</div>
+                              <div className="mt-1 truncate font-mono text-[10px] text-white/90" title={event.generatedName}>{event.generatedName || 'Sin archivo'}</div>
+                              <div className="mt-1 text-[10px] font-semibold text-slate-400">{event.user} · {new Date(event.createdAt).toLocaleString()}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+                </div>
+              </motion.div>
+            )}
+
             {activeTab === 'upload' && (
               <motion.div 
                 key="upload"
@@ -2341,6 +2454,11 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                                   <div className="text-slate-400 font-sans font-medium flex items-center gap-1.5 mt-0.5 italic">
                                     <Clock className="w-2.5 h-2.5" /> Año {doc.year} • {doc.status}
                                   </div>
+                                  {(doc.score || doc.matched?.length) && (
+                                    <div className="mt-1 rounded-lg bg-green-50 px-2 py-1 text-[9px] font-bold text-green-700">
+                                      Calidad: {doc.score ?? 'N/A'}{doc.matched?.length ? ` · Coincidió por: ${doc.matched.slice(0, 3).join(' / ')}` : ''}
+                                    </div>
+                                  )}
                                 </td>
                                 <td className="p-2">
                                   <span className={cn(
@@ -2434,12 +2552,105 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
         </main>
       </div>
 
+      {codifyModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-3xl rounded-3xl border border-white/80 bg-white p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-rose-100 bg-rose-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.24em] text-rose-800">
+                  <Download className="h-3 w-3" /> Codificación oficial
+                </div>
+                <h3 className="text-2xl font-black text-slate-950">Vista previa de descarga</h3>
+                <p className="mt-1 text-sm font-semibold text-slate-500">El servidor calcula el próximo anexo de la dimensión antes de descargar.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCodifyModal({ open: false, status: 'preview', files: [], previewNames: [], created: [] })}
+                className="rounded-xl border border-slate-200 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-slate-50"
+              >
+                Cerrar
+              </button>
+            </div>
+
+            <div className="mt-5 space-y-3">
+              {(codifyModal.status === 'ready' ? codifyModal.created.map((item) => item.generatedName) : codifyModal.previewNames).map((name, idx) => (
+                <div key={`${name}_${idx}`} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Se descargará como</div>
+                  <div className="mt-1 break-all font-mono text-xs font-black text-slate-900">{name}</div>
+                </div>
+              ))}
+            </div>
+
+            {codifyModal.status === 'ready' && codifyModal.created.length > 0 && (
+              <div className="mt-5 rounded-3xl border border-amber-200 bg-amber-50 p-4">
+                <div className="mb-3 text-[10px] font-black uppercase tracking-[0.24em] text-amber-700">Subir a Drive y guardar hipervínculo</div>
+                <div className="space-y-3">
+                  {codifyModal.created.map((item) => (
+                    <div key={item.id} className="flex gap-2 max-md:flex-col">
+                      <input
+                        value={codifiedEvidenceLinks[item.id] ?? ''}
+                        onChange={(event) => setCodifiedEvidenceLinks((prev) => ({ ...prev, [item.id]: event.target.value }))}
+                        placeholder="https://drive.google.com/..."
+                        className="h-11 min-w-0 flex-1 rounded-xl border border-amber-200 bg-white px-3 text-xs font-semibold outline-none focus:border-rose-300 focus:ring-2 focus:ring-rose-100"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => saveCodifiedEvidenceLink(item.id)}
+                        disabled={!codifiedEvidenceLinks[item.id]?.trim() || savingEvidenceLinkId === item.id}
+                        className="rounded-xl bg-rose-900 px-4 text-[10px] font-black uppercase tracking-widest text-white hover:bg-rose-800 disabled:bg-slate-300"
+                      >
+                        {savingEvidenceLinkId === item.id ? 'Guardando' : 'Guardar'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="mt-6 flex justify-end gap-2 max-sm:flex-col">
+              {codifyModal.status === 'preview' && (
+                <button
+                  type="button"
+                  onClick={confirmCodifiedDownload}
+                  className="rounded-2xl bg-rose-950 px-5 py-3 text-[10px] font-black uppercase tracking-widest text-white shadow-lg shadow-rose-900/20 hover:bg-rose-900"
+                >
+                  Confirmar descarga
+                </button>
+              )}
+              {codifyModal.status === 'downloading' && (
+                <button type="button" disabled className="rounded-2xl bg-slate-300 px-5 py-3 text-[10px] font-black uppercase tracking-widest text-white">
+                  Reservando y descargando...
+                </button>
+              )}
+              {codifyModal.status === 'ready' && (
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('catalog')}
+                  className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-[10px] font-black uppercase tracking-widest text-slate-700 hover:bg-slate-50"
+                >
+                  Ir al catálogo
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Footer Status Bar */}
       <footer className="h-9 bg-slate-950 text-white flex items-center px-7 justify-between shrink-0 z-20 shadow-[0_-10px_30px_rgba(15,23,42,0.12)] max-md:hidden">
         <div className="flex items-center gap-6 text-[9px] font-black tracking-widest uppercase">
           <span className="flex items-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-400 shadow-[0_0_8px_rgba(74,222,128,0.5)]"></span>
-            Base de Datos Sincronizada
+            <span className={cn(
+              "w-1.5 h-1.5 rounded-full shadow-[0_0_8px_rgba(74,222,128,0.5)]",
+              syncStatus === 'synced' ? 'bg-green-400' : syncStatus === 'syncing' ? 'bg-amber-300 animate-pulse' : 'bg-red-400'
+            )}></span>
+            {syncStatus === 'synced'
+              ? 'Guardado'
+              : syncStatus === 'syncing'
+                ? 'Sincronizando...'
+                : syncStatus === 'local'
+                  ? 'Trabajando localmente'
+                  : 'Error de conexión'}
           </span>
           <span className="text-slate-600">|</span>
           <span className="text-slate-400">Último análisis: {results.length > 0 ? "Realizado ahora" : "Ninguno"}</span>

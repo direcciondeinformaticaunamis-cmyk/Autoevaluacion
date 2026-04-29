@@ -21,6 +21,8 @@ export interface IndicatorAnalysis {
     focus: "alto" | "medio" | "bajo";
     status: "vigente" | "antiguo" | "duplicado";
     link: string;
+    score?: number;
+    matched?: string[];
   }[];
   technicalAnalysis: {
     complianceLevel: string;

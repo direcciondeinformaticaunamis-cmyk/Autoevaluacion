@@ -17,6 +17,8 @@ const PORT = process.env.PORT || 3000;
 const DIST_DIR = path.join(__dirname, 'dist');
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const PENDING_EVIDENCE_FILE = path.join(DATA_DIR, 'pending-evidence.json');
+const SESSIONS_FILE = path.join(DATA_DIR, 'sessions.json');
+const HISTORY_FILE = path.join(DATA_DIR, 'history.json');
 
 const ALLOWED_USERS = new Set([
   'direccion',
@@ -30,8 +32,28 @@ const ALLOWED_USERS = new Set([
 
 const AUTH_PASSWORD = (process.env.AUTH_PASSWORD || 'Unamis2026*').trim();
 
-// In-memory sessions (single instance). If you scale horizontally, swap this for Redis.
-const sessions = new Map();
+// Persisted sessions for single-instance hosting. If you scale horizontally, swap this for Redis/DB.
+const sessions = new Map(readJsonFile(SESSIONS_FILE, []).map((s) => [s.sid, s]));
+
+function readJsonFile(file, fallback) {
+  try {
+    if (!fs.existsSync(file)) return fallback;
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+    return parsed ?? fallback;
+  } catch (err) {
+    console.error(`Could not read ${file}:`, err);
+    return fallback;
+  }
+}
+
+function writeJsonFile(file, value) {
+  ensureDataDir();
+  fs.writeFileSync(file, JSON.stringify(value, null, 2));
+}
+
+function persistSessions() {
+  writeJsonFile(SESSIONS_FILE, [...sessions.entries()].map(([sid, sess]) => ({ sid, ...sess })));
+}
 
 function parseCookies(header) {
   const out = {};
@@ -139,6 +161,97 @@ function writePendingEvidence(items) {
   return normalized;
 }
 
+function appendHistory(user, action, details = {}) {
+  const history = readJsonFile(HISTORY_FILE, []);
+  const entry = {
+    id: crypto.randomUUID(),
+    user,
+    action,
+    createdAt: Date.now(),
+    ...details,
+  };
+  writeJsonFile(HISTORY_FILE, [entry, ...Array.isArray(history) ? history : []].slice(0, 1000));
+  return entry;
+}
+
+function normalizeDriveLink(link) {
+  const raw = String(link || '').trim();
+  if (!raw) return '';
+  let url;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new Error('invalid_url');
+  }
+  if (!/(^|\.)drive\.google\.com$/i.test(url.hostname)) throw new Error('invalid_drive_link');
+  return url.toString();
+}
+
+function parseAnexoName(name) {
+  const dim = String(name).match(/\bC\s*([123])\s*_?\s*ANEXO\b/i);
+  const anexo = String(name).match(/\bANEXO\s*_?\s*(\d{1,6})\b/i);
+  return {
+    dimensionId: dim ? dim[1] : null,
+    anexoNum: anexo ? Number(anexo[1]) : null,
+  };
+}
+
+function nextAnexoForDimension(names, dimensionId) {
+  let max = 0;
+  for (const name of names) {
+    const parsed = parseAnexoName(name);
+    if (parsed.dimensionId !== dimensionId || !parsed.anexoNum || Number.isNaN(parsed.anexoNum)) continue;
+    if (parsed.anexoNum > max) max = parsed.anexoNum;
+  }
+  return max + 1;
+}
+
+function safeFileBase(name) {
+  return String(name || 'archivo')
+    .replace(/\.[^.]+$/, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '') || 'archivo';
+}
+
+function buildGeneratedName({ originalName, indicatorId, dimensionId, knownNames = [] }) {
+  const existingNames = [
+    ...knownNames.map(String),
+    ...readPendingEvidence().map((item) => item.generatedName),
+  ];
+  const anexoNum = nextAnexoForDimension(existingNames, String(dimensionId));
+  const anexoStr = String(anexoNum).padStart(3, '0');
+  const ext = String(originalName || '').match(/\.[^.]+$/)?.[0]?.toLowerCase() || '';
+  return `C${dimensionId}_ANEXO_${anexoStr}_${String(indicatorId).toLowerCase()}_01_${safeFileBase(originalName)}${ext}`;
+}
+
+function diffPendingEvidence(oldItems, newItems, user) {
+  const oldById = new Map(oldItems.map((item) => [item.id, item]));
+  const newById = new Map(newItems.map((item) => [item.id, item]));
+  for (const oldItem of oldItems) {
+    if (!newById.has(oldItem.id)) {
+      appendHistory(user, 'removed_evidence', {
+        evidenceId: oldItem.id,
+        generatedName: oldItem.generatedName,
+        indicatorId: oldItem.indicatorId,
+        link: oldItem.link || '',
+      });
+    }
+  }
+  for (const newItem of newItems) {
+    const oldItem = oldById.get(newItem.id);
+    if (!oldItem) continue;
+    if ((oldItem.link || '') !== (newItem.link || '') || Boolean(oldItem.pending) !== Boolean(newItem.pending)) {
+      appendHistory(user, newItem.link ? 'saved_drive_link' : 'updated_evidence', {
+        evidenceId: newItem.id,
+        generatedName: newItem.generatedName,
+        indicatorId: newItem.indicatorId,
+        link: newItem.link || '',
+      });
+    }
+  }
+}
+
 app.get('/api/me', (req, res) => {
   const user = getUserFromReq(req);
   if (!user) return res.status(401).json({ ok: false });
@@ -155,6 +268,7 @@ app.post('/api/login', (req, res) => {
 
   const sid = crypto.randomUUID();
   sessions.set(sid, { user, ts: Date.now() });
+  persistSessions();
   setSessionCookie(res, sid, secure);
   return res.status(200).json({ ok: true, user });
 });
@@ -164,6 +278,7 @@ app.post('/api/logout', (req, res) => {
   const cookies = parseCookies(req.headers.cookie);
   const sid = cookies.unamis_sid;
   if (sid) sessions.delete(sid);
+  persistSessions();
   clearSessionCookie(res, secure);
   return res.status(200).json({ ok: true });
 });
@@ -172,12 +287,66 @@ app.get('/api/pending-evidence', requireAuth, (_req, res) => {
   return res.status(200).json({ ok: true, items: readPendingEvidence() });
 });
 
+app.get('/api/evidence-history', requireAuth, (req, res) => {
+  const history = readJsonFile(HISTORY_FILE, []);
+  return res.status(200).json({ ok: true, items: Array.isArray(history) ? history : [] });
+});
+
+app.post('/api/anexo-preview', requireAuth, (req, res) => {
+  const items = Array.isArray(req.body?.items) ? req.body.items : [];
+  const knownNames = Array.isArray(req.body?.knownNames) ? req.body.knownNames : [];
+  const generatedNames = [];
+  const workingNames = [...knownNames, ...readPendingEvidence().map((item) => item.generatedName)];
+  for (const item of items) {
+    const generatedName = buildGeneratedName({ ...item, knownNames: workingNames });
+    generatedNames.push(generatedName);
+    workingNames.push(generatedName);
+  }
+  return res.status(200).json({ ok: true, generatedNames });
+});
+
+app.post('/api/anexo-reserve', requireAuth, (req, res) => {
+  const originalName = String(req.body?.originalName || '').trim();
+  const indicatorId = String(req.body?.indicatorId || '').trim().toLowerCase();
+  const dimensionId = String(req.body?.dimensionId || '').trim();
+  const knownNames = Array.isArray(req.body?.knownNames) ? req.body.knownNames : [];
+  if (!originalName || !indicatorId || !dimensionId) return res.status(400).json({ ok: false, error: 'missing_fields' });
+
+  const generatedName = buildGeneratedName({ originalName, indicatorId, dimensionId, knownNames });
+  const current = readPendingEvidence();
+  const item = normalizePendingEvidenceItem({
+    id: crypto.randomUUID(),
+    originalName,
+    generatedName,
+    indicatorId,
+    dimensionId,
+    year: String(req.body?.year || new Date().getFullYear()),
+    link: '',
+    pending: true,
+    createdAt: Date.now(),
+  });
+  const items = writePendingEvidence([item, ...current]);
+  appendHistory(req.user, 'codified_evidence', { evidenceId: item.id, generatedName, indicatorId, link: '' });
+  return res.status(200).json({ ok: true, item, items });
+});
+
 app.put('/api/pending-evidence', requireAuth, (req, res) => {
   if (!Array.isArray(req.body?.items)) {
     return res.status(400).json({ ok: false, error: 'items_must_be_array' });
   }
-  const items = writePendingEvidence(req.body.items);
-  return res.status(200).json({ ok: true, items });
+  try {
+    const incoming = req.body.items.map((item) => ({
+      ...item,
+      link: item?.link ? normalizeDriveLink(item.link) : '',
+      pending: item?.link ? false : item?.pending,
+    }));
+    const previous = readPendingEvidence();
+    const items = writePendingEvidence(incoming);
+    diffPendingEvidence(previous, items, req.user);
+    return res.status(200).json({ ok: true, items });
+  } catch (err) {
+    return res.status(400).json({ ok: false, error: err.message || 'invalid_evidence' });
+  }
 });
 
 // Simple healthcheck for hosting platforms.

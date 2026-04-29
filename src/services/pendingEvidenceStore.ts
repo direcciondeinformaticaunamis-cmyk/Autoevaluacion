@@ -10,6 +10,17 @@ export type PendingEvidence = {
   createdAt: number;
 };
 
+export type EvidenceHistoryItem = {
+  id: string;
+  user: string;
+  action: string;
+  createdAt: number;
+  evidenceId?: string;
+  generatedName?: string;
+  indicatorId?: string;
+  link?: string;
+};
+
 const STORAGE_KEY = 'unamis.pendingEvidence.v1';
 
 function normalizeItems(items: PendingEvidence[]): PendingEvidence[] {
@@ -75,6 +86,46 @@ export async function syncPendingEvidence(items: PendingEvidence[]): Promise<Pen
   const saved = data?.ok && Array.isArray(data.items) ? normalizeItems(data.items) : normalizeItems(items);
   savePendingEvidence(saved);
   return saved;
+}
+
+export async function fetchEvidenceHistory(): Promise<EvidenceHistoryItem[]> {
+  const res = await fetch('/api/evidence-history', { credentials: 'include' });
+  if (!res.ok) throw new Error('No se pudo leer el historial de cambios.');
+  const data = await res.json();
+  return data?.ok && Array.isArray(data.items) ? data.items : [];
+}
+
+export async function previewCodifiedNames(items: { originalName: string; indicatorId: string; dimensionId: string }[], knownNames: string[]): Promise<string[]> {
+  const res = await fetch('/api/anexo-preview', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ items, knownNames }),
+  });
+  if (!res.ok) throw new Error('No se pudo calcular la vista previa de codificación.');
+  const data = await res.json();
+  return data?.ok && Array.isArray(data.generatedNames) ? data.generatedNames : [];
+}
+
+export async function reserveCodifiedEvidence(input: {
+  originalName: string;
+  indicatorId: string;
+  dimensionId: string;
+  year: string;
+  knownNames: string[];
+}): Promise<{ item: PendingEvidence; items: PendingEvidence[] }> {
+  const res = await fetch('/api/anexo-reserve', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw new Error('No se pudo reservar el número oficial de anexo.');
+  const data = await res.json();
+  if (!data?.ok || !data.item || !Array.isArray(data.items)) throw new Error('Respuesta inválida al reservar anexo.');
+  const items = normalizeItems(data.items);
+  savePendingEvidence(items);
+  return { item: data.item, items };
 }
 
 export function addPendingEvidence(items: PendingEvidence[], next: Omit<PendingEvidence, 'id' | 'createdAt'>): PendingEvidence[] {
