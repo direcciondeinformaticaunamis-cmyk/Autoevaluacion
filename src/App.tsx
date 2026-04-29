@@ -42,6 +42,7 @@ import {
   addPendingEvidence,
   loadPendingEvidence,
   removePendingEvidence,
+  savePendingEvidence,
 } from './services/pendingEvidenceStore';
 import { buildMaxAnexoByCriterion, nextAnexoForCriterion } from './services/anexoSequencer';
 import { extractPdfText, ocrImageText, ocrPdfText } from './services/pdfText';
@@ -82,6 +83,7 @@ export default function App() {
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
   const [selectedIndicatorForUpload, setSelectedIndicatorForUpload] = useState<string>('');
   const [uploadDescription, setUploadDescription] = useState('');
+  const [uploadDriveLinks, setUploadDriveLinks] = useState('');
   const [pdfExtract, setPdfExtract] = useState<{
     status: 'idle' | 'reading' | 'done' | 'error';
     text: string;
@@ -461,6 +463,10 @@ export default function App() {
     setIsUploading(true);
     try {
       const nowYear = new Date().getFullYear().toString();
+      const driveLinks = uploadDriveLinks
+        .split(/\r?\n/g)
+        .map((x) => x.trim())
+        .filter(Boolean);
       const allKnownNames = [
         ...catalog.items.map((x) => x.name),
         ...pendingEvidence.map((p) => p.generatedName),
@@ -468,7 +474,8 @@ export default function App() {
       const maxByCriterion = buildMaxAnexoByCriterion(allKnownNames);
 
       let next = pendingEvidence;
-      for (const f of uploadFiles) {
+      for (let idx = 0; idx < uploadFiles.length; idx += 1) {
+        const f = uploadFiles[idx]!;
         const base = f.name.replace(/\.[^.]+$/, '');
         const ext = (f.name.match(/\.[^.]+$/)?.[0] ?? '').toLowerCase();
         const safe = base.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
@@ -477,23 +484,16 @@ export default function App() {
         const anexoNum = nextAnexoForCriterion(maxByCriterion, opt.criterionId);
         const anexoStr = String(anexoNum).padStart(3, '0');
         const generatedName = `C${opt.dimensionId}_ANEXO_${anexoStr}_${opt.indicator}_01_${safe}${ext || ''}`;
+        const objectUrl = URL.createObjectURL(f);
+        const a = document.createElement('a');
+        a.href = objectUrl;
+        a.download = generatedName;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(objectUrl);
 
-        const form = new FormData();
-        form.append('file', f, generatedName);
-        form.append('generatedName', generatedName);
-        form.append('indicatorId', opt.indicator.toLowerCase());
-        form.append('criterionId', opt.criterionId.toLowerCase());
-        form.append('dimensionId', opt.dimensionId);
-
-        const response = await fetch('/api/drive/upload', {
-          method: 'POST',
-          credentials: 'include',
-          body: form,
-        });
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok || !data?.ok) {
-          throw new Error(data?.error || 'No se pudo subir el archivo a Drive.');
-        }
+        const link = driveLinks[idx] || (uploadFiles.length === 1 ? driveLinks[0] : '') || '';
 
         next = addPendingEvidence(next, {
           originalName: f.name,
@@ -501,8 +501,8 @@ export default function App() {
           indicatorId: opt.indicator.toLowerCase(),
           dimensionId: opt.dimensionId,
           year: nowYear,
-          link: data.file?.link || '',
-          pending: false,
+          link,
+          pending: !link,
         });
       }
 
@@ -510,6 +510,7 @@ export default function App() {
       setUploadFiles([]);
       setSelectedIndicatorForUpload('');
       setUploadDescription('');
+      setUploadDriveLinks('');
       setPdfExtract({ status: 'idle', text: '' });
       setOcrState({ status: 'idle', progress: 0 });
       setPreviewUrl((prev) => {
@@ -518,7 +519,7 @@ export default function App() {
       });
       setActiveTab('catalog');
     } catch (err: any) {
-      alert(`No se pudo subir a Drive: ${String(err?.message || err)}`);
+      alert(`No se pudo codificar el archivo: ${String(err?.message || err)}`);
     } finally {
       setIsUploading(false);
     }
@@ -715,12 +716,23 @@ export default function App() {
               <button 
                 onClick={() => setActiveTab('catalog')}
                 className={cn(
-                  "col-span-2 flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border max-lg:col-span-1 max-sm:col-span-2",
+                  "flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border",
                   activeTab === 'catalog' ? "bg-rose-900 text-white border-rose-950 shadow-lg shadow-rose-900/20" : "bg-white/90 text-slate-600 border-slate-200 hover:bg-rose-50 hover:text-rose-900 hover:border-rose-200"
                 )}
               >
                 <BookOpen className="w-3.5 h-3.5" />
                 Catálogo
+              </button>
+              <button
+                onClick={() => setActiveTab('upload')}
+                className={cn(
+                  "flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border",
+                  activeTab === 'upload' ? "bg-rose-900 text-white border-rose-950 shadow-lg shadow-rose-900/20" : "bg-white/90 text-slate-600 border-slate-200 hover:bg-rose-50 hover:text-rose-900 hover:border-rose-200"
+                )}
+                title="Codificar archivo, descargarlo y registrar link de Drive"
+              >
+                <Upload className="w-3.5 h-3.5" />
+                Codificar
               </button>
             </div>
             <div className="relative">
@@ -1690,8 +1702,8 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                 className="flex-1 flex flex-col max-w-4xl mx-auto w-full gap-8 py-8 overflow-y-auto min-h-0 pr-1"
               >
                 <div className="text-center">
-                  <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tight mb-2">Central de Carga de Evidencias</h2>
-                  <p className="text-sm text-slate-500 font-medium italic">Sube archivos locales, analiza contenido/OCR y vincula cada evidencia a la matriz.</p>
+                  <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tight mb-2">Codificador de Evidencias</h2>
+                  <p className="text-sm text-slate-500 font-medium italic">Seleccioná archivo, elegí el indicador, descargá la versión renombrada y pegá el link de Drive cuando lo tengas.</p>
                   {analysisHint && results.length === 0 && (
                     <div className="mt-3 text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 inline-block">
                       Primero sube archivos y vincula evidencias para habilitar Panel, Buscador y Matriz.
@@ -1884,6 +1896,19 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                           <option key={o.indicator} value={o.indicator}>[{o.indicator}] {o.description.substring(0, 48)}...</option>
                         ))}
                       </select>
+
+                      <div className="mt-3">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block px-1 mb-2">Hipervínculo de Drive (opcional)</label>
+                        <textarea
+                          value={uploadDriveLinks}
+                          onChange={(e) => setUploadDriveLinks(e.target.value)}
+                          placeholder="Pegá aquí el link de Drive después de subir manualmente. Si son varios archivos, un link por línea."
+                          className="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs font-medium outline-none ring-offset-2 focus:ring-2 focus:ring-rose-700 transition-all shadow-sm min-h-20"
+                        />
+                        <div className="mt-2 text-[10px] font-semibold text-slate-400 leading-relaxed">
+                          Si lo dejás vacío, se agrega como pendiente. Después podés cargar el vínculo cuando lo tengas.
+                        </div>
+                      </div>
                     </div>
 
                     {pendingOnlyEvidence.length > 0 && (
@@ -1899,13 +1924,30 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                                 <div className="truncate font-mono text-[11px] font-bold text-slate-800">{p.generatedName}</div>
                                 <div className="text-[10px] text-slate-400 font-semibold">Indicador {p.indicatorId}</div>
                               </div>
-                              <button
-                                onClick={() => setPendingEvidence((prev) => removePendingEvidence(prev, p.id))}
-                                className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-rose-900"
-                                title="Quitar de pendientes"
-                              >
-                                Quitar
-                              </button>
+                              <div className="flex shrink-0 items-center gap-2">
+                                <button
+                                  onClick={() => {
+                                    const link = window.prompt('Pegá el hipervínculo de Drive para este anexo:')?.trim();
+                                    if (!link) return;
+                                    setPendingEvidence((prev) => {
+                                      const updated = prev.map((item) => item.id === p.id ? { ...item, link, pending: false } : item);
+                                      savePendingEvidence(updated);
+                                      return updated;
+                                    });
+                                  }}
+                                  className="text-[10px] font-black uppercase tracking-widest text-rose-800 hover:text-rose-950"
+                                  title="Agregar link de Drive"
+                                >
+                                  Link
+                                </button>
+                                <button
+                                  onClick={() => setPendingEvidence((prev) => removePendingEvidence(prev, p.id))}
+                                  className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-rose-900"
+                                  title="Quitar de pendientes"
+                                >
+                                  Quitar
+                                </button>
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -1919,8 +1961,8 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                       <div className="absolute top-0 right-0 p-2 opacity-10"><Database className="w-12 h-12 text-rose-300" /></div>
                       <h4 className="text-[10px] font-black text-rose-300 uppercase tracking-[0.2em] mb-4">Información de Sistema</h4>
                       <div className="space-y-3 text-[11px] font-medium leading-relaxed opacity-90">
-                        <p>• Los archivos se renombrarán automáticamente según la norma institucional UNAMIS.</p>
-                        <p>• Al vincular, se suben a Google Drive en la carpeta configurada para el indicador o criterio.</p>
+                        <p>• La app calcula el siguiente número de anexo del criterio seleccionado.</p>
+                        <p>• Se descargará una copia renombrada; luego la subís manualmente a Drive y pegás el link.</p>
                       </div>
                       <button 
                         onClick={executeUpload}
@@ -1928,9 +1970,9 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                         className="w-full mt-8 bg-rose-800 hover:bg-rose-700 disabled:bg-slate-700 text-white font-black uppercase text-[10px] tracking-widest py-3 rounded-lg transition-all flex items-center justify-center gap-2"
                       >
                         {isUploading ? (
-                          <> <Loader2 className="w-4 h-4 animate-spin" /> Subiendo a Drive... </>
+                          <> <Loader2 className="w-4 h-4 animate-spin" /> Codificando... </>
                         ) : (
-                          <> <Upload className="w-4 h-4" /> Subir a Drive y Vincular </>
+                          <> <Download className="w-4 h-4" /> Descargar Codificado y Registrar </>
                         )}
                       </button>
                     </div>
