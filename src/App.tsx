@@ -774,7 +774,7 @@ export default function App() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
-                className="flex-1 flex flex-col max-w-6xl mx-auto w-full"
+                className="flex-1 min-h-0 overflow-y-auto pb-14 pr-2 flex flex-col max-w-6xl mx-auto w-full"
               >
                 <div className="mb-6 flex justify-between items-end gap-6 rounded-3xl border border-white/80 bg-white/70 px-6 py-5 shadow-[0_18px_60px_rgba(15,23,42,0.08)] backdrop-blur-xl max-md:flex-col max-md:items-start max-md:px-5">
                   <div>
@@ -815,7 +815,7 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                   )}
                 </div>
 
-                <div className="bg-white/95 border border-white rounded-3xl shadow-[0_24px_80px_rgba(15,23,42,0.10)] flex-1 flex flex-col overflow-hidden ring-1 ring-slate-200/70">
+                <div className="bg-white/95 border border-white rounded-3xl shadow-[0_24px_80px_rgba(15,23,42,0.10)] flex-none flex flex-col overflow-hidden ring-1 ring-slate-200/70">
                   <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-white to-rose-50/40">
                     <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
                       <FileText className="w-3.5 h-3.5" /> Entrada de Registro de Auditoría
@@ -826,7 +826,7 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                     value={inputText}
                     onChange={(e) => setInputText(e.target.value)}
                     placeholder="[CRI]_[ANX]_[IND]_[NUM]_[DESC] ..."
-                    className="flex-1 w-full p-7 text-xs font-mono bg-white resize-none outline-none focus:bg-rose-50/10 transition-colors leading-relaxed placeholder:text-slate-300"
+                    className="h-28 w-full p-7 text-xs font-mono bg-white resize-none outline-none focus:bg-rose-50/10 transition-colors leading-relaxed placeholder:text-slate-300"
                   />
 
                   <div className="px-5 pb-5">
