@@ -6,8 +6,8 @@ type Parsed = {
 };
 
 function parseName(name: string): Parsed {
-  const dim = name.match(/\bC\s*([123])\s*_?\s*ANEXO\b/i);
-  const anexo = name.match(/\bANEXO\s*_?\s*(\d{1,6})\b/i);
+  const dim = name.match(/(?:^|[^a-z0-9])C\s*([123])\s*_?\s*ANEXO(?:_|\s|[^a-z0-9]|$)/i);
+  const anexo = name.match(/ANEXO\s*_?\s*(\d{1,6})(?:_|\s|[^a-z0-9]|$)/i);
   const indicator = name.match(/(\d+\.\d+\.[a-z])/i);
   const indicatorId = indicator ? indicator[1].toLowerCase() : null;
   const criterionId = indicatorId ? indicatorId.split('.').slice(0, 2).join('.') : null;
@@ -54,4 +54,18 @@ export function nextAnexoForDimension(maxBy: Map<string, number>, dimensionId: s
   const next = prev + 1;
   maxBy.set(dimensionId, next);
   return next;
+}
+
+export function buildMaxAnexoForCatalog(names: string[]): number {
+  let max = 0;
+  for (const n of names) {
+    const p = parseName(n);
+    if (!p.anexoNum || Number.isNaN(p.anexoNum)) continue;
+    if (p.anexoNum > max) max = p.anexoNum;
+  }
+  return max;
+}
+
+export function nextAnexoForCatalog(currentMax: number): number {
+  return currentMax + 1;
 }

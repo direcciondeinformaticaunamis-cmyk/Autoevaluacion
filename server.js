@@ -203,19 +203,19 @@ function normalizeDriveLink(link) {
 }
 
 function parseAnexoName(name) {
-  const dim = String(name).match(/\bC\s*([123])\s*_?\s*ANEXO\b/i);
-  const anexo = String(name).match(/\bANEXO\s*_?\s*(\d{1,6})\b/i);
+  const dim = String(name).match(/(?:^|[^a-z0-9])C\s*([123])\s*_?\s*ANEXO(?:_|\s|[^a-z0-9]|$)/i);
+  const anexo = String(name).match(/ANEXO\s*_?\s*(\d{1,6})(?:_|\s|[^a-z0-9]|$)/i);
   return {
     dimensionId: dim ? dim[1] : null,
     anexoNum: anexo ? Number(anexo[1]) : null,
   };
 }
 
-function nextAnexoForDimension(names, dimensionId) {
+function nextAnexoForCatalog(names) {
   let max = 0;
   for (const name of names) {
     const parsed = parseAnexoName(name);
-    if (parsed.dimensionId !== dimensionId || !parsed.anexoNum || Number.isNaN(parsed.anexoNum)) continue;
+    if (!parsed.anexoNum || Number.isNaN(parsed.anexoNum)) continue;
     if (parsed.anexoNum > max) max = parsed.anexoNum;
   }
   return max + 1;
@@ -235,7 +235,7 @@ function buildGeneratedName({ originalName, indicatorId, dimensionId, knownNames
     ...knownNames.map(String),
     ...readPendingEvidence().map((item) => item.generatedName),
   ];
-  const anexoNum = nextAnexoForDimension(existingNames, String(dimensionId));
+  const anexoNum = nextAnexoForCatalog(existingNames);
   const anexoStr = String(anexoNum).padStart(3, '0');
   const ext = String(originalName || '').match(/\.[^.]+$/)?.[0]?.toLowerCase() || '';
   return `C${dimensionId}_ANEXO_${anexoStr}_${String(indicatorId).toLowerCase()}_01_${safeFileBase(originalName)}${ext}`;
