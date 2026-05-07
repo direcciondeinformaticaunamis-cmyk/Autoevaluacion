@@ -115,6 +115,8 @@ export default function App() {
   const [isCodifyingAnalyzedFiles, setIsCodifyingAnalyzedFiles] = useState(false);
   const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'error' | 'local'>('syncing');
   const [evidenceHistory, setEvidenceHistory] = useState<EvidenceHistoryItem[]>([]);
+  const [catalogBotQuestion, setCatalogBotQuestion] = useState('');
+  const [catalogBotAnswer, setCatalogBotAnswer] = useState('Preguntame por el último anexo de una dimensión. Ejemplo: "último anexo dimensión 3".');
   const [codifyModal, setCodifyModal] = useState<{
     open: boolean;
     status: 'preview' | 'downloading' | 'ready';
@@ -776,6 +778,33 @@ export default function App() {
   const canAdminCatalog = ['direccion', 'director_informatica'].includes(authedUser);
   const selectedUploadOption = allIndicatorOptions.find((o) => o.indicator === selectedIndicatorForUpload);
   const uploadPreviewNames: string[] = [];
+  const parseCatalogAnexo = (name: string) => {
+    const dimension = name.match(/(?:^|[^a-z0-9])C\s*([123])\s*_?\s*ANEXO(?:_|\s|[^a-z0-9]|$)/i)?.[1] ?? null;
+    const anexo = name.match(/ANEXO\s*_?\s*(\d{1,6})(?:_|\s|[^a-z0-9]|$)/i)?.[1] ?? null;
+    return { dimension, anexo: anexo ? Number(anexo) : null };
+  };
+  const catalogDimensionStats = ['1', '2', '3'].map((dimensionId) => {
+    const items = catalog.items.filter((item) => parseCatalogAnexo(item.name).dimension === dimensionId);
+    const last = items.reduce((max, item) => {
+      const parsed = parseCatalogAnexo(item.name);
+      return parsed.anexo && parsed.anexo > max ? parsed.anexo : max;
+    }, 0);
+    return { dimensionId, total: items.length, last, next: last + 1 };
+  });
+  const answerCatalogBot = () => {
+    const q = catalogBotQuestion.trim().toLowerCase();
+    const dimension = q.match(/dimensi[oó]n\s*([123])/)?.[1] ?? q.match(/\bc\s*([123])\b/)?.[1] ?? q.match(/\b([123])\b/)?.[1];
+    if (!dimension) {
+      setCatalogBotAnswer('Decime la dimensión. Ejemplo: "cuál es el último anexo de dimensión 1".');
+      return;
+    }
+    const stat = catalogDimensionStats.find((item) => item.dimensionId === dimension);
+    if (!stat) {
+      setCatalogBotAnswer('Solo puedo consultar dimensiones 1, 2 y 3.');
+      return;
+    }
+    setCatalogBotAnswer(`Dimensión ${dimension}: último anexo ${String(stat.last).padStart(3, '0')}. El próximo codificado será ${String(stat.next).padStart(3, '0')}. Total detectado: ${stat.total}.`);
+  };
 
   return (
     <div className="flex flex-col h-screen w-full bg-[radial-gradient(circle_at_top_left,rgba(244,63,94,0.08),transparent_34%),linear-gradient(135deg,#fff7f8_0%,#f8fafc_42%,#eef2f7_100%)] text-slate-900 font-sans select-none overflow-hidden">
@@ -1624,6 +1653,30 @@ C3_ANEXO_001_3.1.a_Resolucion_111_2023_Nombramiento_Amalia_Verdun.pdf`)}
                       </div>
                       <h2 className="text-3xl font-black tracking-tight text-slate-950 max-md:text-2xl">Catálogo de Anexos Drive</h2>
                       <p className="mt-2 text-sm font-semibold text-slate-500">Explorá evidencias por dimensión, criterio e indicador con acceso directo a Drive.</p>
+                    </div>
+                    <div className="min-w-[320px] flex-1 rounded-2xl border border-rose-100 bg-rose-50/60 p-3 shadow-sm max-lg:w-full max-lg:min-w-0">
+                      <div className="mb-2 flex items-center gap-2 text-[9px] font-black uppercase tracking-[0.22em] text-rose-800">
+                        <Bot className="h-3.5 w-3.5" /> Bot del catálogo
+                      </div>
+                      <div className="flex gap-2 max-sm:flex-col">
+                        <input
+                          value={catalogBotQuestion}
+                          onChange={(event) => setCatalogBotQuestion(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') answerCatalogBot();
+                          }}
+                          placeholder="Ej: último anexo dimensión 3"
+                          className="h-9 min-w-0 flex-1 rounded-xl border border-rose-100 bg-white px-3 text-[11px] font-semibold text-slate-700 outline-none focus:border-rose-300 focus:ring-2 focus:ring-rose-100"
+                        />
+                        <button
+                          type="button"
+                          onClick={answerCatalogBot}
+                          className="rounded-xl bg-rose-900 px-3 text-[9px] font-black uppercase tracking-widest text-white hover:bg-rose-800"
+                        >
+                          Preguntar
+                        </button>
+                      </div>
+                      <div className="mt-2 text-[10px] font-bold leading-relaxed text-slate-600">{catalogBotAnswer}</div>
                     </div>
                     <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-right shadow-sm">
                       <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total anexos</div>

@@ -211,11 +211,11 @@ function parseAnexoName(name) {
   };
 }
 
-function nextAnexoForCatalog(names) {
+function nextAnexoForDimension(names, dimensionId) {
   let max = 0;
   for (const name of names) {
     const parsed = parseAnexoName(name);
-    if (!parsed.anexoNum || Number.isNaN(parsed.anexoNum)) continue;
+    if (parsed.dimensionId !== dimensionId || !parsed.anexoNum || Number.isNaN(parsed.anexoNum)) continue;
     if (parsed.anexoNum > max) max = parsed.anexoNum;
   }
   return max + 1;
@@ -235,7 +235,7 @@ function buildGeneratedName({ originalName, indicatorId, dimensionId, knownNames
     ...knownNames.map(String),
     ...readPendingEvidence().map((item) => item.generatedName),
   ];
-  const anexoNum = nextAnexoForCatalog(existingNames);
+  const anexoNum = nextAnexoForDimension(existingNames, String(dimensionId));
   const anexoStr = String(anexoNum).padStart(3, '0');
   const ext = String(originalName || '').match(/\.[^.]+$/)?.[0]?.toLowerCase() || '';
   return `C${dimensionId}_ANEXO_${anexoStr}_${String(indicatorId).toLowerCase()}_01_${safeFileBase(originalName)}${ext}`;
